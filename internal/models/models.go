@@ -109,7 +109,17 @@ const (
 	Audi
 	BMW
 	Toyota
+	Cadillac
+	Renaute
 	Self
+)
+
+type IsManufacturer int
+
+const (
+	Manufacture IsManufacturer = iota
+	Semi
+	Client
 )
 
 type Team struct {
@@ -125,7 +135,7 @@ type Team struct {
 	Tokens         int
 	Budget         int // millions
 	SettingsAngle  SettingsAngle
-	IsManufacturer bool
+	IsManufacturer IsManufacturer
 }
 
 type Car struct {
