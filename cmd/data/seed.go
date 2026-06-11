@@ -6,8 +6,11 @@ import (
 	"errors"
 	data "f1/initial_data"
 	"f1/internal/models"
+	"fmt"
 	"io"
 	"strconv"
+	"strings"
+	"flag"
 	
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -29,8 +32,135 @@ func main() {
 	
 	seed := NewSeed(db)
 	
-	seed.createTables()
-	seed.parseBaseData()
+	drop := flag.Bool("d", false, "drop tables")
+	create := flag.Bool("c", false, "create tables")
+	seedData := flag.Bool("s", false, "seed data")
+	check := flag.Bool("check", false, "check data")
+	
+	flag.Parse()
+	
+	if *drop {
+		seed.dropTables()
+	}
+	
+	if *create {
+		seed.createTables()
+	}
+	
+	if *seedData {
+		seed.seedData()
+	}
+	
+	if *check {
+		seed.checkData()
+	}
+	
+}
+
+func (s *Seed) seedData() {
+	if err := s.seedEngines(s.parseEngineData()); err != nil {
+		panic(err)
+	}
+	if err := s.seedTeams(s.parseBaseData()); err != nil {
+		panic(err)
+	}
+	if err := s.seedTracks(s.parseTrackData()); err != nil {
+		panic(err)
+	}
+	if err := s.seedPrincipals(s.parsePrincipalData()); err != nil {
+		panic(err)
+	}
+	if err := s.seedPilots(s.parsePilotData()); err != nil {
+		panic(err)
+	}
+	
+	if err := s.seedPilotTracks(s.parsePilotTrackData()); err != nil {
+		panic(err)
+	}
+}
+
+func (s *Seed) checkData() {
+	tables := []string{
+		"engine",
+		"base_team",
+		"teams",
+		"tracks",
+		"teams_principals",
+		"pilots_initial",
+		"pilots",
+		"pilots_track_initial",
+		"pilots_track",
+		"players",
+	}
+	
+	for _, table := range tables {
+		fmt.Printf("\n=== %s ===\n", table)
+		
+		rows, err := s.DB.Query("SELECT * FROM " + table)
+		if err != nil {
+			fmt.Println("error:", err)
+			continue
+		}
+		
+		cols, err := rows.Columns()
+		if err != nil {
+			rows.Close()
+			fmt.Println("error:", err)
+			continue
+		}
+		
+		fmt.Println(strings.Join(cols, " | "))
+		
+		values := make([]interface{}, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range values {
+			ptrs[i] = &values[i]
+		}
+		
+		for rows.Next() {
+			if err := rows.Scan(ptrs...); err != nil {
+				fmt.Println("error:", err)
+				continue
+			}
+			
+			parts := make([]string, len(cols))
+			for i, v := range values {
+				switch val := v.(type) {
+				case []byte:
+					parts[i] = string(val)
+				case nil:
+					parts[i] = "NULL"
+				default:
+					parts[i] = fmt.Sprintf("%v", val)
+				}
+			}
+			fmt.Println(strings.Join(parts, " | "))
+		}
+		
+		rows.Close()
+	}
+}
+
+func (s *Seed) dropTables() {
+	// Сначала удаляем таблицы со внешними ключами (дочерние)
+	tables := []string{
+		`DROP TABLE IF EXISTS players`,
+		`DROP TABLE IF EXISTS pilots_track_initial`,
+		`DROP TABLE IF EXISTS pilots_track`,
+		`DROP TABLE IF EXISTS pilots_initial`,
+		`DROP TABLE IF EXISTS pilots`,
+		`DROP TABLE IF EXISTS tracks`,
+		`DROP TABLE IF EXISTS teams_principals`,
+		`DROP TABLE IF EXISTS engine`,
+		`DROP TABLE IF EXISTS base_team`,
+		`DROP TABLE IF EXISTS teams`,
+	}
+	
+	for _, query := range tables {
+		if _, err := s.DB.Exec(query); err != nil {
+			panic(err)
+		}
+	}
 }
 
 func (s *Seed) createTables() {
@@ -87,7 +217,8 @@ func (s *Seed) createTables() {
     	id INTEGER PRIMARY KEY AUTOINCREMENT,
     	pilot_id INTEGER,
     	track_id INTEGER,
-    	FOREIGN KEY(pilot_id) REFERENCES pilots(id),
+    	level INTEGER,
+    	FOREIGN KEY(pilot_id) REFERENCES pilots_initial(id),
     	FOREIGN KEY(track_id) REFERENCES tracks(id)
 	)
 	`
@@ -101,7 +232,8 @@ func (s *Seed) createTables() {
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
 	    pilot_id INTEGER,
 	    track_id INTEGER,
-	    FOREIGN KEY(pilot_id) REFERENCES pilots(id),
+	    level INTEGER,
+	    FOREIGN KEY(pilot_id) REFERENCES pilots_initial(id),
 	    FOREIGN KEY(track_id) REFERENCES tracks(id)
 	)
 	`
@@ -163,7 +295,7 @@ func (s *Seed) createTables() {
 	    tube INTEGER,
 	    sim INTEGER,
 	    update_rtg INTEGER,
-	    is_manuf INTEGER
+	    is_manufacturer INTEGER
 	)
 	`
 	
@@ -182,7 +314,7 @@ func (s *Seed) createTables() {
 	    tube INTEGER,
 	    sim INTEGER,
 	    update_rtg INTEGER,
-	    is_manuf INTEGER
+	    is_manufacturer INTEGER
 	)
 	`
 	
@@ -211,8 +343,158 @@ func (s *Seed) createTables() {
 	
 }
 
-func (s *Seed) seedData() {
+func (s *Seed) seedEngines(engines []models.Engine) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	
+	stmt, err := tx.Prepare(`INSERT INTO engine (manufacturer, price, power) VALUES (?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	
+	for _, e := range engines {
+		if _, err := stmt.Exec(e.Engine, e.Price, e.BaseLevel); err != nil {
+			return err
+		}
+	}
+	
+	return tx.Commit()
+}
+
+func (s *Seed) seedTeams(base []models.Team) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	
+	stmtBase, err := tx.Prepare(`
+		INSERT INTO base_team (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmtBase.Close()
+	
+	stmtTeam, err := tx.Prepare(`
+		INSERT INTO teams (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmtTeam.Close()
+	
+	for _, t := range base {
+		if _, err := stmtBase.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer)); err != nil {
+			return err
+		}
+		if _, err := stmtTeam.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer)); err != nil {
+			return err
+		}
+	}
+	
+	return tx.Commit()
+}
+
+func (s *Seed) seedTracks(tracks []models.Track) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	
+	stmt, err := tx.Prepare(`
+		INSERT INTO tracks (name, downforce, type, difficulity, quali_impact, rain, tyre)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	
+	for _, tr := range tracks {
+		if _, err := stmt.Exec(tr.Name, int(tr.DownForceLevel), int(tr.Type), tr.Difficulty, int(tr.QualifyingImpact), tr.RainPossibility, tr.Tyre); err != nil {
+			return err
+		}
+	}
+	
+	return tx.Commit()
+}
+
+func (s *Seed) seedPrincipals(principals []models.TeamPrincipal) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	
+	stmt, err := tx.Prepare(`INSERT INTO teams_principals (name, price, level) VALUES (?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	
+	for _, p := range principals {
+		if _, err := stmt.Exec(p.Name, p.Price, p.Level); err != nil {
+			return err
+		}
+	}
+	
+	return tx.Commit()
+}
+
+func (s *Seed) seedPilots(pilots []models.Pilot) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	
+	stmt, err := tx.Prepare(`
+		INSERT INTO pilots_initial (name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	
+	for _, pl := range pilots {
+		vals := []interface{}{
+			pl.Name, pl.Rating, pl.QualifyingRating, int(pl.DrivingStyle), pl.Experience,
+			pl.Adaptiveness, int(pl.Emotions), int(pl.Stability), int(pl.Rain), int(pl.SettingsAngle),
+			pl.Starting, pl.TyreManagement, pl.MistakePossibility, pl.Price, pl.Sponsors,
+		}
+		if _, err := stmt.Exec(vals...); err != nil {
+			return err
+		}
+	}
+	
+	return tx.Commit()
+}
+
+func (s *Seed) seedPilotTracks(pilotTrack []models.PilotTrack) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	
+	stmt, err := tx.Prepare(`INSERT INTO pilots_track_initial (pilot_id, track_id, level) VALUES (?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	
+	for _, pt := range pilotTrack {
+		if _, err := stmt.Exec(pt.PilotID, pt.TrackID, pt.Level); err != nil {
+			return err
+		}
+	}
+	
+	return tx.Commit()
 }
 
 func (s *Seed) parseBaseData() []models.Team {
@@ -474,6 +756,8 @@ func (s *Seed) parsePilotTrackData() []models.PilotTrack {
 	
 	reader := csv.NewReader(pilotTrack)
 	
+	var tracks []string
+	
 	var pilotTrackData []models.PilotTrack
 	
 	for {
@@ -486,11 +770,54 @@ func (s *Seed) parsePilotTrackData() []models.PilotTrack {
 		}
 		
 		if row[0] == "" {
+			for i := 0; i < len(row); i++ {
+				tracks = append(tracks, row[i])
+			}
 			continue
 		}
 		
-		pilotTrackData = append(pilotTrackData, models.PilotTrack{
-		})
+		query := `SELECT id FROM pilots_initial WHERE name = ?`
+		pilot, err := s.DB.Query(query, row[0])
+		if err != nil {
+			panic(err)
+		}
+		defer pilot.Close()
+		
+		var pilotID int
+		for pilot.Next() {
+			err := pilot.Scan(&pilotID)
+			if err != nil {
+				panic(err)
+			}
+		}
+		
+		for i := 1; i < len(row); i++ {
+			level, _ := strconv.Atoi(row[i])
+			
+			query := `SELECT id FROM tracks WHERE name = ?`
+			track, err := s.DB.Query(query, tracks[i])
+			if err != nil {
+				panic(err)
+			}
+			defer track.Close()
+			
+			var trackID int
+			for track.Next() {
+				err := track.Scan(&trackID)
+				if err != nil {
+					panic(err)
+				}
+			}
+			
+			pilotTrackData = append(pilotTrackData, models.PilotTrack{
+				PilotID: int64(pilotID),
+				TrackID: int64(trackID),
+				Level:   level,
+				
+			})
+		}
+		
+		
 		
 	}
 	
