@@ -94,6 +94,7 @@ type Track struct {
 }
 
 type PilotTrack struct {
+	ID      int64
 	PilotID int64
 	TrackID int64
 	Level   int // 0-20
