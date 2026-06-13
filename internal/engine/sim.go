@@ -1,8 +1,10 @@
 package engine
 
 import (
+	"context"
 	"database/sql"
 	"f1/internal/models"
+	"f1/internal/storage"
 	"math/rand"
 	"sort"
 	"time"
@@ -11,12 +13,14 @@ import (
 type Engine struct {
 	db *sql.DB
 	r  *rand.Rand
+	repo storage.F1Repo
 }
 
 func NewEngine(db *sql.DB) *Engine {
 	return &Engine{
 		db: db,
 		r:  rand.New(rand.NewSource(time.Now().UnixNano())),
+		repo: storage.NewSqliteF1Repo(db),
 	}
 }
 
@@ -28,9 +32,13 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 		synergyPenalty = 10.0 * (1.0 - float64(pilot.Adaptiveness)/100.0)
 	}
 	
-	// 2. Срез рейтинга за сложность трассы
-	var pilotTrackLvl int
-	_ = e.db.QueryRow("SELECT level FROM session_pilot_tracks WHERE pilot_id = ? AND track_id = ?", pilot.ID, track.ID).Scan(&pilotTrackLvl)
+	ctx := context.Background()
+	pilotTrack, err := e.repo.GetPilotTrack(ctx, pilot.ID, track.ID)
+	if err != nil {
+		return 0, 0
+	}
+	
+	pilotTrackLvl := pilotTrack.Level
 	
 	diffPenalty := 0.0
 	if pilotTrackLvl < 15 {

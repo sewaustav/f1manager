@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,12 +14,12 @@ import (
 )
 
 type CLI struct {
-	store  *storage.Storage
+	store  storage.F1Repo
 	engine *engine.Engine
 	reader *bufio.Reader
 }
 
-func NewCLI(store *storage.Storage, engine *engine.Engine) *CLI {
+func NewCLI(store storage.F1Repo, engine *engine.Engine) *CLI {
 	return &CLI{
 		store:  store,
 		engine: engine,
@@ -26,9 +27,11 @@ func NewCLI(store *storage.Storage, engine *engine.Engine) *CLI {
 	}
 }
 
-func (c *CLI) Start() {
+func (c *CLI) Start(ctx context.Context) {
+	
+	
 	fmt.Println("=== ДОБРО ПОЖАЛОВАТЬ В СИМУЛЯТОР ФОРМУЛЫ 1 ===")
-	_ = c.store.ResetSession()
+	_ = c.store.ResetSession(ctx)
 	
 	fmt.Print("Введите количество игроков (человек): ")
 	playersCountStr, _ := c.reader.ReadString('\n')
@@ -41,16 +44,17 @@ func (c *CLI) Start() {
 		players[i].Name = strings.TrimSpace(name)
 	}
 	
-	c.runDraft(players)
-	c.fillBotTeams()
-	c.configureSeason(players)
-	c.runSimulation()
+	c.runDraft(ctx, players)
+	c.fillBotTeams(ctx)
+	c.configureSeason(ctx, players)
+	c.runSimulation(ctx)
 }
 
-func (c *CLI) runDraft(players []models.Player) {
+func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
+	
 	fmt.Println("\n--- СТАРТ ДРАФТА КОМАНД И ПИЛОТОВ ---")
-	teams, _ := c.store.GetTeams()
-	pilots, _ := c.store.GetPilots()
+	teams, _ := c.store.GetTeams(ctx)
+	pilots, _ := c.store.GetPilots(ctx)
 	
 	for i := range players {
 		fmt.Printf("\n>>> Ход игрока %s <<<\n", players[i].Name)
@@ -77,22 +81,23 @@ func (c *CLI) runDraft(players []models.Player) {
 		players[i].Pilot1 = p1ID
 		
 		// Простой трансферный интерфейс «на лету»
-		c.store.ExecuteTransfer(p1ID, 0, tID, 0)
+		c.store.ExecuteTransfer(ctx, p1ID, 0, tID, 0)
 		
 		fmt.Print("Выберите ID второго пилота: ")
 		p2IDStr, _ := c.reader.ReadString('\n')
 		p2ID, _ := strconv.ParseInt(strings.TrimSpace(p2IDStr), 10, 64)
 		players[i].Pilot2 = p2ID
-		c.store.ExecuteTransfer(p2ID, 0, tID, 0)
+		c.store.ExecuteTransfer(ctx, p2ID, 0, tID, 0)
 		
-		c.store.SavePlayer(players[i])
+		c.store.SavePlayer(ctx, players[i])
 	}
 }
 
-func (c *CLI) fillBotTeams() {
+func (c *CLI) fillBotTeams(ctx context.Context) {
+	
 	fmt.Println("\n--- ЗАПОЛНЕНИЕ ПУСТЫХ СЛОТОВ БОТОВ РУКАМИ ---")
-	pilots, _ := c.store.GetPilots()
-	teams, _ := c.store.GetTeams()
+	pilots, _ := c.store.GetPilots(ctx)
+	teams, _ := c.store.GetTeams(ctx)
 	
 	for _, t := range teams {
 		// Ищем сколько пилотов числится за командой
@@ -107,13 +112,14 @@ func (c *CLI) fillBotTeams() {
 			fmt.Printf("У команды %s не хватает пилота (всего %d/2). Введите ID свободного пилота для заполнения: ", t.Name, count)
 			pIDStr, _ := c.reader.ReadString('\n')
 			pID, _ := strconv.ParseInt(strings.TrimSpace(pIDStr), 10, 64)
-			_ = c.store.ExecuteTransfer(pID, 0, t.ID, 0)
+			_ = c.store.ExecuteTransfer(ctx, pID, 0, t.ID, 0)
 			count++
 		}
 	}
 }
 
-func (c *CLI) configureSeason(players []models.Player) {
+func (c *CLI) configureSeason(ctx context.Context, players []models.Player) {
+	
 	fmt.Println("\n--- РАСПРЕДЕЛЕНИЕ ТОКЕНОВ НА СЕЗОН ---")
 	for _, p := range players {
 		fmt.Printf("\nИгрок %s, распределите 120 токенов на болид.\n", p.Name)
@@ -133,15 +139,16 @@ func (c *CLI) configureSeason(players []models.Player) {
 		fmt.Print("Токены на Надежность (55 = 0% DNF): ")
 		fmt.Scanln(&car.Reliability)
 		
-		_ = c.store.UpdateCar(car)
+		_ = c.store.UpdateCar(ctx, car)
 	}
 }
 
-func (c *CLI) runSimulation() {
+func (c *CLI) runSimulation(ctx context.Context) {
+	
 	fmt.Println("\n=== СТАРТ СИМУЛЯЦИИ СЕЗОНА ===")
-	tracks, _ := c.store.GetTracks()
-	pilots, _ := c.store.GetPilots()
-	teamsList, _ := c.store.GetTeams()
+	tracks, _ := c.store.GetTracks(ctx)
+	pilots, _ := c.store.GetPilots(ctx)
+	teamsList, _ := c.store.GetTeams(ctx)
 	
 	teams := make(map[int64]models.Team)
 	cars := make(map[int64]models.Car)

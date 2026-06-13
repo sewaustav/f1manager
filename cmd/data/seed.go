@@ -188,30 +188,6 @@ func (s *Seed) createTables() {
 		panic(err)
 	}
 	
-	currentPilotTable := `
-	CREATE TABLE IF NOT EXISTS pilots (
-	    id INTEGER PRIMARY KEY AUTOINCREMENT,
-	    name TEXT,
-	    rating INTEGER,
-	    quali_rating INTEGER,
-	    style INTEGER,
-	    expirince INTEGER,
-	    adaptiveness INTEGER,
-	    emotions INTEGER,
-	    stability INTEGER,
-	    rain INTEGER,
-	    settings_angle INTEGER,
-	    starting INTEGER,
-	    tyre_management INTEGER,
-	    mistake_possibility INTEGER,
-	    price INTEGER,
-	    sponsors INTEGER
-	)`
-	
-	if _, err := s.DB.Exec(currentPilotTable); err != nil {
-		panic(err)
-	}
-	
 	pilotTrackTable := `
 	CREATE TABLE IF NOT EXISTS pilots_track_initial (
     	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -327,20 +303,62 @@ func (s *Seed) createTables() {
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
 	    name TEXT,
 	    team_id INTEGER,
-	    pilot1_id INTEGER,
-	    pilot2_id INTEGER,
+-- 	    pilot1_id INTEGER,
+-- 	    pilot2_id INTEGER,
 	    principal_id INTEGER,
+	    budget INTEGER,
 	    FOREIGN KEY(team_id) REFERENCES teams(id),
-	    FOREIGN KEY(pilot1_id) REFERENCES pilots(id),
-	    FOREIGN KEY(pilot2_id) REFERENCES pilots(id),
 	    FOREIGN KEY(principal_id) REFERENCES teams_principals(id)
 	)
 	`
+	
 	
 	if _, err := s.DB.Exec(playerTable); err != nil {
 		panic(err)
 	}
 	
+	currentPilotTable := `
+	CREATE TABLE IF NOT EXISTS pilots (
+	    id INTEGER PRIMARY KEY AUTOINCREMENT,
+	    name TEXT,
+	    team_id INTEGER,
+	    rating INTEGER,
+	    quali_rating INTEGER,
+	    style INTEGER,
+	    expirince INTEGER,
+	    adaptiveness INTEGER,
+	    emotions INTEGER,
+	    stability INTEGER,
+	    rain INTEGER,
+	    settings_angle INTEGER,
+	    starting INTEGER,
+	    tyre_management INTEGER,
+	    mistake_possibility INTEGER,
+	    price INTEGER,
+	    sponsors INTEGER,
+	    FOREIGN KEY(team_id) REFERENCES players(id)
+	)`
+	
+	if _, err := s.DB.Exec(currentPilotTable); err != nil {
+		panic(err)
+	}
+	
+	carTable := `
+	CREATE TABLE IF NOT EXISTS car (
+	    id INTEGER PRIMARY KEY AUTOINCREMENT,
+	    team_id INTEGER,
+	    aerodynamic INTEGER,
+	    engine INTEGER,
+	    chassis INTEGER,
+	    floor INTEGER,
+	    tyres INTEGER,
+	    reliability INTEGER,
+	    FOREIGN KEY(team_id) REFERENCES teams(id)
+	)
+	`
+	if _, err := s.DB.Exec(carTable); err != nil {
+		panic(err)
+	}
 }
 
 func (s *Seed) seedEngines(engines []models.Engine) error {
