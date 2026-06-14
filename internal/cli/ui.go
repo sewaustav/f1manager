@@ -187,7 +187,10 @@ func (c *CLI) fillBotTeams(ctx context.Context) {
 			fmt.Printf("У команды %s не хватает пилота (всего %d/2). Введите ID свободного пилота для заполнения: ", t.Name, count)
 			pIDStr, _ := c.reader.ReadString('\n')
 			pID, _ := strconv.ParseInt(strings.TrimSpace(pIDStr), 10, 64)
-			_ = c.store.ExecuteTransfer(ctx, pID, 0, t.ID, 0)
+			if err := c.store.ExecuteTransfer(ctx, pID, 0, t.ID, 0); err != nil {
+				fmt.Println("Ошибка при выполнении трансфера:", err)
+				continue
+			}
 			count++
 		}
 	}
@@ -234,8 +237,16 @@ func (c *CLI) runSimulation(ctx context.Context) {
 	
 	fmt.Println("\n=== СТАРТ СИМУЛЯЦИИ СЕЗОНА ===")
 	tracks, _ := c.store.GetTracks(ctx)
-	pilots, _ := c.store.GetPilots(ctx)
+	pilots, _ := c.store.GetActivePilots(ctx)
 	teamsList, _ := c.store.GetTeams(ctx)
+	
+	if len(pilots) < 20 {
+		fmt.Println("Недостаточно пилотов для начала сезона!")
+		for _, p := range pilots {
+			fmt.Println(p)
+		}
+		return
+	}
 	
 	teams := make(map[int64]models.Team)
 	cars := make(map[int64]models.Car)
@@ -284,6 +295,6 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		fmt.Printf("%-25s : %d очков\n", name, pts)
 	}
 	
-	c.engine.RecalculateRatings(driverStandings, teamStandings)
+	//c.engine.RecalculateRatings(driverStandings, teamStandings)
 	
 }

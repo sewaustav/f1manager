@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"f1/internal/models"
 	"fmt"
 )
@@ -316,16 +317,23 @@ func (s *SqliteF1Repo) UpdateCar(ctx context.Context, car models.Car) error {
 }
 
 func (s *SqliteF1Repo) ExecuteTransfer(ctx context.Context, pilotID, fromTeamID, teamID int64, cost int) error {
-	fmt.Println(cost, fromTeamID, teamID, pilotID)
-	if err := s.checkBudget(ctx, teamID, cost); err != nil {
-		return err
-	}
 	
 	var playerTeamID int64
 	if err := s.db.QueryRowContext(ctx, `SELECT team_id FROM players WHERE id = ?`, teamID).Scan(&playerTeamID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if err := s.fillTeams(ctx, pilotID, teamID); err != nil {
+				return err
+			}
+			
+			return nil
+		}
 		return err
 	}
 	
+	
+	if err := s.checkBudget(ctx, teamID, cost); err != nil {
+		return err
+	}
 	
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil { return err }
@@ -350,6 +358,13 @@ func (s *SqliteF1Repo) ExecuteTransfer(ctx context.Context, pilotID, fromTeamID,
 		return err
 	}
 	
+	return nil
+}
+
+func (s *SqliteF1Repo) fillTeams(ctx context.Context, pilotID, teamID int64) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE pilots SET garage_id = ? WHERE id = ?`, teamID, pilotID); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -424,4 +439,32 @@ func (s *SqliteF1Repo) UpdateBudget(ctx context.Context, playerID int64, cost in
 		return err
 	}
 	return nil
+}
+
+func (s *SqliteF1Repo) GetActivePilots(ctx context.Context) ([]models.Pilot, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors, team_id, garage_id
+		FROM pilots WHERE garage_id IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var pilots []models.Pilot
+	for rows.Next() {
+		var p models.Pilot
+		var style, emotions, stability, rain, angle int
+		
+		if err := rows.Scan(&p.ID, &p.Name, &p.Rating, &p.QualifyingRating, &style, &p.Experience, &p.Adaptiveness, &emotions, &stability, &rain, &angle, &p.Starting, &p.TyreManagement, &p.MistakePossibility, &p.Price, &p.Sponsors, &p.Team, &p.Garage); err != nil {
+			return nil, err 
+		}
+		
+		p.DrivingStyle = models.DrivingStyle(style)
+		p.Emotions = models.DriverEmotion(emotions)
+		p.Stability = models.DriverStability(stability)
+		p.Rain = models.RainDriving(rain)
+		p.SettingsAngle = models.SettingsAngle(angle)
+		pilots = append(pilots, p)
+	}
+	return pilots, nil
 }

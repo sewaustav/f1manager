@@ -27,4 +27,5 @@ type F1Repo interface {
 	UpdatePilotTrack(ctx context.Context, pt models.PilotTrack) error
 	CreatePilots(ctx context.Context) error
 	CreateTeams(ctx context.Context) ([]models.Team, error)
+	GetActivePilots(ctx context.Context) ([]models.Pilot, error)
 }
