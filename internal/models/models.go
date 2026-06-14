@@ -42,7 +42,7 @@ const (
 type Pilot struct {
 	ID                 int64
 	Name               string
-	Team               string
+	Team               *int64
 	Rating             int // max 100
 	QualifyingRating   int
 	DrivingStyle       DrivingStyle
@@ -167,10 +167,19 @@ type Engine struct {
 type Player struct {
 	ID            int64
 	Name          string
-	Pilot1        int64
-	Pilot2        int64
 	TeamPrincipal int64
 	Team          int64
+	Budget        int
+}
+
+type PlayerProfile struct {
+	ID            int64
+	Name          string
+	TeamPrincipal string
+	Team          string
+	Pilot1        string
+	Pilot2        string
+	Budget        int
 }
 
 // Структуры для вывода результатов гонки

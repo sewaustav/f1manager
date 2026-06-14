@@ -6,19 +6,25 @@ import (
 )
 
 type F1Repo interface {
+	GetPlayer(ctx context.Context, id int64) (models.PlayerProfile, error)
+	GetPlayers(ctx context.Context) ([]models.PlayerProfile, error)
+	GetTeam(ctx context.Context, teamID int64) (models.Team, error)
 	GetTeams(ctx context.Context) ([]models.Team, error)
 	GetPilots(ctx context.Context) ([]models.Pilot, error)
 	GetTracks(ctx context.Context) ([]models.Track, error)
 	GetPilot(ctx context.Context, id int64) (models.Pilot, error)
 	GetPilotTrack(ctx context.Context, pilotID, trackID int64) (models.PilotTrack, error)
-	SavePlayer(ctx context.Context, player models.Player) error
+	GetTeamPrincipals(ctx context.Context) ([]models.TeamPrincipal, error)
+	SavePlayer(ctx context.Context, player models.Player) (int64, error)
 	UpdateTeamTokensAndBudget(ctx context.Context, teamID int64, tokens, budget int) error
 	UpdateCar(ctx context.Context, car models.Car) error
 	ExecuteTransfer(ctx context.Context, pilotID, fromTeamID, teamID int64, cost int) error
+	TeamPrincipalTransfer(ctx context.Context, teamPrincipalID, fromTeamID, TeamID int64, cost int) error
 	ResetSession(ctx context.Context) error
 	GetBudget(ctx context.Context, teamID int64) (int, error)
+	UpdateBudget(ctx context.Context, playerID int64, cost int) error
 	UpdatePilot(ctx context.Context, pilot models.Pilot) error
 	UpdatePilotTrack(ctx context.Context, pt models.PilotTrack) error
-	CreatePilot(ctx context.Context, pilot models.Pilot, pilotTrack models.PilotTrack) error
-	
+	CreatePilots(ctx context.Context) error
+	CreateTeams(ctx context.Context) ([]models.Team, error)
 }

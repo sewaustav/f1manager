@@ -105,12 +105,12 @@ func (e *Engine) SimulateWeekend(track models.Track, pilots []models.Pilot, team
 	results := make([]*tempResult, len(pilots))
 	for i, p := range pilots {
 		var t models.Team
-		for _, team := range teams {
-			if team.Name == p.Team {
-				t = team
-				break
-			}
-		}
+		//for _, team := range teams {
+		//	if team.Name == p.Team {
+		//		t = team
+		//		break
+		//	}
+		//}
 		c := cars[t.ID]
 		tp := principals[t.ID]
 		

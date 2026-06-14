@@ -271,7 +271,8 @@ func (s *Seed) createTables() {
 	    tube INTEGER,
 	    sim INTEGER,
 	    update_rtg INTEGER,
-	    is_manufacturer INTEGER
+	    is_manufacturer INTEGER,
+		budget INTEGER
 	)
 	`
 	
@@ -290,7 +291,8 @@ func (s *Seed) createTables() {
 	    tube INTEGER,
 	    sim INTEGER,
 	    update_rtg INTEGER,
-	    is_manufacturer INTEGER
+	    is_manufacturer INTEGER,
+		budget INTEGER
 	)
 	`
 	
@@ -391,26 +393,26 @@ func (s *Seed) seedTeams(base []models.Team) error {
 	defer tx.Rollback()
 	
 	stmtBase, err := tx.Prepare(`
-		INSERT INTO base_team (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO base_team (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmtBase.Close()
 	
 	stmtTeam, err := tx.Prepare(`
-		INSERT INTO teams (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO teams (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmtTeam.Close()
 	
 	for _, t := range base {
-		if _, err := stmtBase.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer)); err != nil {
+		if _, err := stmtBase.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer), t.Budget); err != nil {
 			return err
 		}
-		if _, err := stmtTeam.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer)); err != nil {
+		if _, err := stmtTeam.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer), t.Budget); err != nil {
 			return err
 		}
 	}

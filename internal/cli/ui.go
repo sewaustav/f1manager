@@ -53,11 +53,13 @@ func (c *CLI) Start(ctx context.Context) {
 func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 	
 	fmt.Println("\n--- СТАРТ ДРАФТА КОМАНД И ПИЛОТОВ ---")
-	teams, _ := c.store.GetTeams(ctx)
-	pilots, _ := c.store.GetPilots(ctx)
+	teams, _ := c.store.CreateTeams(ctx)
+	_ = c.store.CreatePilots(ctx)
+	
 	
 	for i := range players {
 		fmt.Printf("\n>>> Ход игрока %s <<<\n", players[i].Name)
+		//fmt.Println(players[i])
 		
 		fmt.Println("Доступные команды:")
 		for _, t := range teams {
@@ -68,28 +70,102 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		tID, _ := strconv.ParseInt(strings.TrimSpace(tIDStr), 10, 64)
 		players[i].Team = tID
 		
+		//fmt.Println(players[i])
+		
+		team, err := c.store.GetTeam(ctx, tID)
+		if err != nil {
+			fmt.Println("Ошибка при получении бюджета команды:", err)
+			continue
+		}
+		
+		budget := team.Budget
+		
+		player := models.Player{
+			Team: tID,
+			Name: players[i].Name,
+			Budget: budget,
+		}
+		
+		id, err := c.store.SavePlayer(ctx, player) 
+		if err != nil {
+			fmt.Println("Ошибка при сохранении игрока:", err)
+			continue
+		}
+		
 		// Драфт Пилота 1
 		fmt.Println("Доступные пилоты:")
+		pilots, err := c.store.GetPilots(ctx)
+		if err != nil {
+			fmt.Println("Ошибка при получении пилотов:", err)
+			continue
+		}
+		if len(pilots) == 0 {
+			fmt.Println("Нет доступных пилотов для драфта.")
+			continue
+		}
 		for _, p := range pilots {
-			if p.Team == "" || true { // Показываем всех для трансфера/выбора
-				fmt.Printf("[%d] %s (Рейтинг: %d, Цена: %d млн, Текущая команда: %s)\n", p.ID, p.Name, p.Rating, p.Price, p.Team)
+			var teamStr string
+			if p.Team != nil {
+				teamStr = fmt.Sprintf("%d", *p.Team)
+				fmt.Printf("[%d] %s (Рейтинг: %d, Цена: %d млн, Текущая команда: %s)\n", p.ID, p.Name, p.Rating, p.Price, teamStr)
 			}
 		}
 		fmt.Print("Выберите ID первого пилота: ")
 		p1IDStr, _ := c.reader.ReadString('\n')
 		p1ID, _ := strconv.ParseInt(strings.TrimSpace(p1IDStr), 10, 64)
-		players[i].Pilot1 = p1ID
 		
-		// Простой трансферный интерфейс «на лету»
-		c.store.ExecuteTransfer(ctx, p1ID, 0, tID, 0)
+		if pilots[p1ID].Sponsors != 0 {
+			if err = c.store.UpdateBudget(ctx, id, pilots[p1ID].Sponsors); err != nil {
+				fmt.Println("Ошибка при обновлении бюджета:", err)
+				continue
+			}
+			budget, err = c.store.GetBudget(ctx, id)
+		}
+		if err = c.store.ExecuteTransfer(ctx, p1ID, 0, id, pilots[p1ID].Price); err != nil {
+			fmt.Println("Ошибка при выполнении трансфера:", err)
+			continue
+		}
 		
 		fmt.Print("Выберите ID второго пилота: ")
 		p2IDStr, _ := c.reader.ReadString('\n')
 		p2ID, _ := strconv.ParseInt(strings.TrimSpace(p2IDStr), 10, 64)
-		players[i].Pilot2 = p2ID
-		c.store.ExecuteTransfer(ctx, p2ID, 0, tID, 0)
 		
-		c.store.SavePlayer(ctx, players[i])
+		if pilots[p2ID].Sponsors != 0 {
+			if err = c.store.UpdateBudget(ctx, id, pilots[p2ID].Sponsors); err != nil {
+				fmt.Println("Ошибка при обновлении бюджета:", err)
+				continue
+			}
+			budget, err = c.store.GetBudget(ctx, id)
+		}
+		if err = c.store.ExecuteTransfer(ctx, p2ID, 0, id, pilots[p2ID].Price); err != nil {
+			fmt.Println("Ошибка при выполнении трансфера:", err)
+			continue
+		}
+		
+		principals, err := c.store.GetTeamPrincipals(ctx)
+		if err != nil {
+			fmt.Println("Ошибка при получении Team Principals:", err)
+			return
+		}
+		for _, p := range principals {
+			fmt.Printf("[%d] %s (Цена: %d, Уровень: %d)\n", p.ID, p.Name, p.Price, p.Level)
+		}
+		fmt.Print("Выберете айди Team Principal: ")
+		principalIDStr, _ := c.reader.ReadString('\n')
+		principalID, _ := strconv.ParseInt(strings.TrimSpace(principalIDStr), 10, 64)
+		players[i].TeamPrincipal = principalID
+		if err := c.store.TeamPrincipalTransfer(ctx, principalID, 0, id, principals[principalID].Price); err != nil {
+			fmt.Println("Ошибка при выполнении трансфера Team Principal:", err)
+			continue
+		}
+		
+		playerProfile, err := c.store.GetPlayer(ctx, id)
+		if err != nil {
+			fmt.Println("Ошибка при получении профиля игрока:", err)
+			continue
+		}
+		fmt.Println(playerProfile)
+		
 	}
 }
 
@@ -97,13 +173,13 @@ func (c *CLI) fillBotTeams(ctx context.Context) {
 	
 	fmt.Println("\n--- ЗАПОЛНЕНИЕ ПУСТЫХ СЛОТОВ БОТОВ РУКАМИ ---")
 	pilots, _ := c.store.GetPilots(ctx)
-	teams, _ := c.store.GetTeams(ctx)
+	players, _ := c.store.GetPlayers(ctx)
 	
-	for _, t := range teams {
+	for _, t := range players {
 		// Ищем сколько пилотов числится за командой
 		count := 0
 		for _, p := range pilots {
-			if p.Team == t.Name {
+			if *p.Team == t.ID {
 				count++
 			}
 		}
