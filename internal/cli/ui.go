@@ -258,15 +258,27 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		principals[t.ID] = models.TeamPrincipal{Level: 20} // Усредненный дефолт шефа
 	}
 	
+	snapshots := make([]engine.PilotSeasonSnapshot, len(pilots))
+	for i, p := range pilots {
+		snapshots[i] = engine.PilotSeasonSnapshot{
+			PilotID:         p.ID,
+			BaseRating:      p.Rating,
+			BaseQualiRating: p.QualifyingRating,
+		}
+	}
+	
+	driverPoints := make(map[int64]int)   // pilotID -> очки
+	teamPoints   := make(map[int64]int)   // garageID -> очки
+	
 	driverStandings := make(map[string]int)
-	teamStandings := make(map[string]int)
+	teamStandings   := make(map[string]int)
 	
 	for _, track := range tracks {
 		fmt.Printf("\n----------------------------------------\n")
 		fmt.Printf("ЭТАП: %s\n", track.Name)
 		fmt.Printf("----------------------------------------\n")
 		
-		results := c.engine.SimulateWeekend(track, pilots, teams, cars, principals)
+		results := c.engine.SimulateWeekend(ctx, track, pilots, teams, cars, principals)
 		
 		fmt.Printf("%-4s | %-20s | %-15s | %-5s | %-5s | %-6s\n", "Поз", "Пилот", "Команда", "Квала", "Гонка", "Очки")
 		for _, res := range results {
@@ -276,8 +288,13 @@ func (c *CLI) runSimulation(ctx context.Context) {
 			}
 			fmt.Printf("%-4d | %-20s | %-15s | %-5d | %-5s | +%-5d\n", res.RacePosition, res.PilotName, res.TeamName, res.QualiPosition, status, res.Points)
 			
+			driverPoints[res.PilotID] += res.Points
 			driverStandings[res.PilotName] += res.Points
-			teamStandings[res.TeamName] += res.Points
+			
+			if res.GarageID != 0 {
+				teamPoints[res.GarageID] += res.Points
+				teamStandings[res.TeamName] += res.Points
+			}
 		}
 	}
 	
@@ -295,6 +312,11 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		fmt.Printf("%-25s : %d очков\n", name, pts)
 	}
 	
-	//c.engine.RecalculateRatings(driverStandings, teamStandings)
+	c.engine.UpdateAfterSeason(ctx, engine.SeasonStandings{
+		DriverPoints: driverPoints,
+		TeamPoints:   teamPoints,
+		Pilots:       pilots,
+		Snapshots:    snapshots,
+	})
 	
 }

@@ -186,6 +186,7 @@ type PlayerProfile struct {
 // Структуры для вывода результатов гонки
 type RaceResult struct {
 	PilotID       int64
+	GarageID int64
 	PilotName     string
 	TeamName      string
 	QualiPosition int

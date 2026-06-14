@@ -89,7 +89,7 @@ func (e *Engine) getVariance(p models.Pilot) float64 {
 	}
 }
 
-func (e *Engine) SimulateWeekend(track models.Track, pilots []models.Pilot, teams map[int64]models.Team, cars map[int64]models.Car, principals map[int64]models.TeamPrincipal) []models.RaceResult {
+func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots []models.Pilot, teams map[int64]models.Team, cars map[int64]models.Car, principals map[int64]models.TeamPrincipal) []models.RaceResult {
 	isRain := e.r.Intn(100) < track.RainPossibility
 	
 	type tempResult struct {
@@ -221,6 +221,7 @@ func (e *Engine) SimulateWeekend(track models.Track, pilots []models.Pilot, team
 		}
 		finalResults[pos] = models.RaceResult{
 			PilotID:       res.pilot.ID,
+			GarageID:      *res.pilot.Garage,
 			PilotName:     res.pilot.Name,
 			TeamName:      res.team.Name,
 			QualiPosition: res.qualiPos,
@@ -231,9 +232,7 @@ func (e *Engine) SimulateWeekend(track models.Track, pilots []models.Pilot, team
 		}
 	}
 	
-	return finalResults
-}
-
-func (e *Engine) RecalculateRatings(driversStandings map[string]int, teamsStandings map[string]int) {
+	e.updateAfterRace(ctx, track, finalResults, pilots)
 	
+	return finalResults
 }
