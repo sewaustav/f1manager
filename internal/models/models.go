@@ -42,6 +42,7 @@ const (
 type Pilot struct {
 	ID                 int64
 	Name               string
+	Garage             *int64
 	Team               *int64
 	Rating             int // max 100
 	QualifyingRating   int
@@ -176,7 +177,7 @@ type PlayerProfile struct {
 	ID            int64
 	Name          string
 	TeamPrincipal string
-	Team          string
+	Team          int64
 	Pilot1        string
 	Pilot2        string
 	Budget        int

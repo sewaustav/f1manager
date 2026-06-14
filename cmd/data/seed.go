@@ -323,6 +323,7 @@ func (s *Seed) createTables() {
 	CREATE TABLE IF NOT EXISTS pilots (
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
 	    name TEXT,
+	    garage_id INTEGER,
 	    team_id INTEGER,
 	    rating INTEGER,
 	    quali_rating INTEGER,
@@ -338,8 +339,10 @@ func (s *Seed) createTables() {
 	    mistake_possibility INTEGER,
 	    price INTEGER,
 	    sponsors INTEGER,
-	    FOREIGN KEY(team_id) REFERENCES players(id)
+	    FOREIGN KEY(team_id) REFERENCES players(id),
+	    FOREIGN KEY(garage_id) REFERENCES teams(id)
 	)`
+	
 	
 	if _, err := s.DB.Exec(currentPilotTable); err != nil {
 		panic(err)

@@ -131,7 +131,7 @@ func (s *SqliteF1Repo) GetTeams(ctx context.Context) ([]models.Team, error) {
 
 func (s *SqliteF1Repo) GetPilots(ctx context.Context) ([]models.Pilot, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors, team_id
+		SELECT id, name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors, team_id, garage_id
 		FROM pilots`)
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (s *SqliteF1Repo) GetPilots(ctx context.Context) ([]models.Pilot, error) {
 		var p models.Pilot
 		var style, emotions, stability, rain, angle int
 		
-		if err := rows.Scan(&p.ID, &p.Name, &p.Rating, &p.QualifyingRating, &style, &p.Experience, &p.Adaptiveness, &emotions, &stability, &rain, &angle, &p.Starting, &p.TyreManagement, &p.MistakePossibility, &p.Price, &p.Sponsors, &p.Team); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Rating, &p.QualifyingRating, &style, &p.Experience, &p.Adaptiveness, &emotions, &stability, &rain, &angle, &p.Starting, &p.TyreManagement, &p.MistakePossibility, &p.Price, &p.Sponsors, &p.Team, &p.Garage); err != nil {
 			return nil, err
 		}
 		
@@ -200,10 +200,10 @@ func (s *SqliteF1Repo) GetPilot(ctx context.Context, id int64) (models.Pilot, er
 	var style, emotions, stability, rain, angle int
 	
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors
+		SELECT id, name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors, team_id, garage_id
 		FROM pilots WHERE id = ?`, id)
 	
-	if err := row.Scan(&p.ID, &p.Name, &p.Rating, &p.QualifyingRating, &style, &p.Experience, &p.Adaptiveness, &emotions, &stability, &rain, &angle, &p.Starting, &p.TyreManagement, &p.MistakePossibility, &p.Price, &p.Sponsors); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Rating, &p.QualifyingRating, &style, &p.Experience, &p.Adaptiveness, &emotions, &stability, &rain, &angle, &p.Starting, &p.TyreManagement, &p.MistakePossibility, &p.Price, &p.Sponsors, &p.Team, &p.Garage); err != nil {
 		return models.Pilot{}, err
 	}
 	
@@ -321,6 +321,12 @@ func (s *SqliteF1Repo) ExecuteTransfer(ctx context.Context, pilotID, fromTeamID,
 		return err
 	}
 	
+	var playerTeamID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT team_id FROM players WHERE id = ?`, teamID).Scan(&playerTeamID); err != nil {
+		return err
+	}
+	
+	
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil { return err }
 	defer tx.Rollback()
@@ -336,7 +342,7 @@ func (s *SqliteF1Repo) ExecuteTransfer(ctx context.Context, pilotID, fromTeamID,
 		}
 	}
 	
-	if _, err := tx.ExecContext(ctx, `UPDATE pilots SET team_id = ? WHERE id = ?`, teamID, pilotID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE pilots SET team_id = ?, garage_id = ? WHERE id = ?`, teamID, playerTeamID, pilotID); err != nil {
 		return err
 	}
 	

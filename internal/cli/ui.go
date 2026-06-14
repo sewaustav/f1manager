@@ -104,10 +104,8 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 			continue
 		}
 		for _, p := range pilots {
-			var teamStr string
-			if p.Team != nil {
-				teamStr = fmt.Sprintf("%d", *p.Team)
-				fmt.Printf("[%d] %s (Рейтинг: %d, Цена: %d млн, Текущая команда: %s)\n", p.ID, p.Name, p.Rating, p.Price, teamStr)
+			if p.Team == nil {
+				fmt.Printf("[%d] %s (Рейтинг: %d, Цена: %d млн)\n", p.ID, p.Name, p.Rating, p.Price)
 			}
 		}
 		fmt.Print("Выберите ID первого пилота: ")
@@ -173,13 +171,14 @@ func (c *CLI) fillBotTeams(ctx context.Context) {
 	
 	fmt.Println("\n--- ЗАПОЛНЕНИЕ ПУСТЫХ СЛОТОВ БОТОВ РУКАМИ ---")
 	pilots, _ := c.store.GetPilots(ctx)
-	players, _ := c.store.GetPlayers(ctx)
+	//players, _ := c.store.GetPlayers(ctx)
+	teams, _ := c.store.GetTeams(ctx)
 	
-	for _, t := range players {
+	for _, t := range teams {
 		// Ищем сколько пилотов числится за командой
 		count := 0
 		for _, p := range pilots {
-			if *p.Team == t.ID {
+			if p.Garage != nil && *p.Garage == t.ID {
 				count++
 			}
 		}
@@ -194,6 +193,24 @@ func (c *CLI) fillBotTeams(ctx context.Context) {
 	}
 }
 
+func (c *CLI) putTokens() (int, int, int, int, int, int) {
+	var aeroDynamic, engine, chassis, floor, tyres, reliability int
+	fmt.Print("Токены на аэродинамику")
+	fmt.Scanln(&aeroDynamic)
+	fmt.Print("Токены на Мотор: ")
+	fmt.Scanln(&engine)
+	fmt.Print("Токены на Шасси: ")
+	fmt.Scanln(&chassis)
+	fmt.Print("Токены на Днище: ")
+	fmt.Scanln(&floor)
+	fmt.Print("Токены на Шины: ")
+	fmt.Scanln(&tyres)
+	fmt.Print("Токены на Надежность (55 = 0% DNF): ")
+	fmt.Scanln(&reliability)
+	return aeroDynamic, engine, chassis, floor, tyres, reliability
+	
+}
+
 func (c *CLI) configureSeason(ctx context.Context, players []models.Player) {
 	
 	fmt.Println("\n--- РАСПРЕДЕЛЕНИЕ ТОКЕНОВ НА СЕЗОН ---")
@@ -202,18 +219,12 @@ func (c *CLI) configureSeason(ctx context.Context, players []models.Player) {
 		var car models.Car
 		car.TeamID = p.Team
 		
-		fmt.Print("Токены на Аэродинамику: ")
-		fmt.Scanln(&car.AeroDynamic)
-		fmt.Print("Токены на Мотор: ")
-		fmt.Scanln(&car.Engine)
-		fmt.Print("Токены на Шасси: ")
-		fmt.Scanln(&car.Chassis)
-		fmt.Print("Токены на Днище: ")
-		fmt.Scanln(&car.Floor)
-		fmt.Print("Токены на Шины: ")
-		fmt.Scanln(&car.Tyres)
-		fmt.Print("Токены на Надежность (55 = 0% DNF): ")
-		fmt.Scanln(&car.Reliability)
+		car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability = c.putTokens()
+		
+		if car.Reliability + car.AeroDynamic + car.Engine + car.Chassis + car.Floor + car.Tyres > 120 {
+			fmt.Println("Сумма токенов должна быть равна 120!")
+			
+		}
 		
 		_ = c.store.UpdateCar(ctx, car)
 	}
