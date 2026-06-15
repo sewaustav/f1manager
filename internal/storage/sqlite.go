@@ -464,6 +464,9 @@ func (s *SqliteF1Repo) checkBudget(ctx context.Context, teamID int64, cost int) 
 }
 
 func (s *SqliteF1Repo) UpdateBudget(ctx context.Context, playerID int64, cost int) error {
+	if err := s.checkBudget(ctx, playerID, cost); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE players SET budget = budget - ? WHERE id = ?`, cost, playerID); err != nil {
 		return err
 	}

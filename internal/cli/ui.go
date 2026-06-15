@@ -219,7 +219,9 @@ func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team model
 			fmt.Println("failed to update budget:", err)
 		}
 		
-		if err := txRepo.UpdateBudget(ctx, player.ID, 0); err != nil {}
+		if err := txRepo.UpdateBudget(ctx, player.ID, engines[engineId].Price); err != nil {
+			fmt.Println("failed to update budget:", err)
+		}
 		
 		if err := tx.Commit(); err != nil {
 			fmt.Println("failed to commit transaction:", err)
