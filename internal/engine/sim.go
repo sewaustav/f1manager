@@ -105,12 +105,9 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 	results := make([]*tempResult, len(pilots))
 	for i, p := range pilots {
 		var t models.Team
-		//for _, team := range teams {
-		//	if team.Name == p.Team {
-		//		t = team
-		//		break
-		//	}
-		//}
+		if p.Garage != nil {
+			t = teams[*p.Garage]
+		}
 		c := cars[t.ID]
 		tp := principals[t.ID]
 		
@@ -219,9 +216,15 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		if pos < len(pointsTable) && !res.isDNF {
 			pts = pointsTable[pos]
 		}
+		
+		var garageID int64
+		if res.pilot.Garage != nil {
+			garageID = *res.pilot.Garage
+		}
+		
 		finalResults[pos] = models.RaceResult{
 			PilotID:       res.pilot.ID,
-			GarageID:      *res.pilot.Garage,
+			GarageID:      garageID,
 			PilotName:     res.pilot.Name,
 			TeamName:      res.team.Name,
 			QualiPosition: res.qualiPos,

@@ -152,7 +152,10 @@ func (e *Engine) updateAfterRace(
 		updated.QualifyingRating = clamp(pilot.QualifyingRating+qualiRatingDelta, 0, 100)
 		updated.Starting = clamp(pilot.Starting+startingDelta, 0, 100)
 		
-		_ = e.repo.UpdatePilot(ctx, updated)
+		if err := e.repo.UpdatePilot(ctx, updated); err != nil {
+			fmt.Println("Error updating pilot", err)
+			return 
+		}
 		
 		// ── pilots_track: победа +3, подиум +2 ───────────────────────────────
 		if !res.IsDNF {
@@ -167,7 +170,10 @@ func (e *Engine) updateAfterRace(
 				pt, err := e.repo.GetPilotTrack(ctx, pilot.ID, track.ID)
 				if err == nil {
 					pt.Level = clamp(pt.Level+trackDelta, 0, 20)
-					_ = e.repo.UpdatePilotTrack(ctx, pt)
+					if err := e.repo.UpdatePilotTrack(ctx, pt); err != nil {
+						fmt.Println("Error updating pilot track", err)
+						return 
+					}
 				}
 			}
 		}

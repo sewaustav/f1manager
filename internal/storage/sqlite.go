@@ -253,7 +253,7 @@ func (s *SqliteF1Repo) UpdateTeamTokensAndBudget(ctx context.Context, teamID int
 }
 
 func (s *SqliteF1Repo) UpdatePilot(ctx context.Context, pilot models.Pilot) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE pilots SET rating = ?, quali_rating = ?, style = ?, exp = ?, adaptiveness = ?, emotions = ?, stability = ?, rain = ?, settings_angle = ?, starting = ?, tyre_management = ?, mistake_possibility = ?, price = ?, sponsors = ? WHERE id = ?`, pilot.Rating, pilot.QualifyingRating, pilot.DrivingStyle, pilot.Experience, pilot.Adaptiveness, pilot.Emotions, pilot.Stability, pilot.Rain, pilot.SettingsAngle, pilot.Starting, pilot.TyreManagement, pilot.MistakePossibility, pilot.Price, pilot.Sponsors, pilot.ID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE pilots SET rating = ?, quali_rating = ?, style = ?, expirince = ?, adaptiveness = ?, emotions = ?, stability = ?, rain = ?, settings_angle = ?, starting = ?, tyre_management = ?, mistake_possibility = ?, price = ?, sponsors = ? WHERE id = ?`, pilot.Rating, pilot.QualifyingRating, pilot.DrivingStyle, pilot.Experience, pilot.Adaptiveness, pilot.Emotions, pilot.Stability, pilot.Rain, pilot.SettingsAngle, pilot.Starting, pilot.TyreManagement, pilot.MistakePossibility, pilot.Price, pilot.Sponsors, pilot.ID); err != nil {
 		return err
 	}
 	return nil
