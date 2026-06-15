@@ -196,12 +196,12 @@ func (c *CLI) fillBotTeams(ctx context.Context) {
 	}
 }
 
-func (c *CLI) putTokens() (int, int, int, int, int, int) {
-	var aeroDynamic, engine, chassis, floor, tyres, reliability int
-	fmt.Print("Токены на аэродинамику")
+func (c *CLI) putTokens() (int, int, int, int, int, int, models.SettingsAngle) {
+	var aeroDynamic, engineTokens, chassis, floor, tyres, reliability, angle int
+	fmt.Print("Токены на аэродинамику: ")
 	fmt.Scanln(&aeroDynamic)
 	fmt.Print("Токены на Мотор: ")
-	fmt.Scanln(&engine)
+	fmt.Scanln(&engineTokens)
 	fmt.Print("Токены на Шасси: ")
 	fmt.Scanln(&chassis)
 	fmt.Print("Токены на Днище: ")
@@ -210,7 +210,10 @@ func (c *CLI) putTokens() (int, int, int, int, int, int) {
 	fmt.Scanln(&tyres)
 	fmt.Print("Токены на Надежность (55 = 0% DNF): ")
 	fmt.Scanln(&reliability)
-	return aeroDynamic, engine, chassis, floor, tyres, reliability
+	fmt.Print("Настройка баланса: ")
+	fmt.Scanln(&angle)
+	
+	return aeroDynamic, engineTokens, chassis, floor, tyres, reliability, models.SettingsAngle(angle)
 	
 }
 
@@ -222,14 +225,16 @@ func (c *CLI) configureSeason(ctx context.Context, players []models.Player) {
 		var car models.Car
 		car.TeamID = p.Team
 		
-		car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability = c.putTokens()
+		car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, car.SettingsAngle = c.putTokens()
 		
 		if car.Reliability + car.AeroDynamic + car.Engine + car.Chassis + car.Floor + car.Tyres > 120 {
 			fmt.Println("Сумма токенов должна быть равна 120!")
 			
 		}
 		
-		_ = c.store.UpdateCar(ctx, car)
+		if err := c.store.UpdateCar(ctx, car); err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 

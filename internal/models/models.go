@@ -136,7 +136,6 @@ type Team struct {
 	UpdateRating   int // up to 10
 	Tokens         int
 	Budget         int // millions
-	SettingsAngle  SettingsAngle
 	IsManufacturer IsManufacturer
 }
 
@@ -148,6 +147,7 @@ type Car struct {
 	Floor       int
 	Tyres       int
 	Reliability int // 55 tokens = 0% DNF chance
+	SettingsAngle  SettingsAngle
 }
 
 type TeamPrincipal struct {

@@ -28,7 +28,7 @@ func NewEngine(db *sql.DB) *Engine {
 func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.Car, track models.Track, principal models.TeamPrincipal, isRain bool) (float64, float64) {
 	// 1. Штраф за углы настроек
 	synergyPenalty := 0.0
-	if pilot.SettingsAngle != team.SettingsAngle {
+	if pilot.SettingsAngle != car.SettingsAngle {
 		synergyPenalty = 10.0 * (1.0 - float64(pilot.Adaptiveness)/100.0)
 	}
 	

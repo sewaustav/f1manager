@@ -358,6 +358,7 @@ func (s *Seed) createTables() {
 	    floor INTEGER,
 	    tyres INTEGER,
 	    reliability INTEGER,
+	    settings_angle INTEGER,
 	    FOREIGN KEY(team_id) REFERENCES teams(id)
 	)
 	`

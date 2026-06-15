@@ -310,7 +310,13 @@ func (s *SqliteF1Repo) CreatePilots(ctx context.Context) error {
 }
 
 func (s *SqliteF1Repo) UpdateCar(ctx context.Context, car models.Car) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE car SET aerodynamic = ?, engine = ?, chassis = ?, floor = ?, tyres = ?, reliability = ? WHERE team_id = ?`, car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, car.TeamID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE car SET aerodynamic = ?, engine = ?, chassis = ?, floor = ?, tyres = ?, reliability = ?, settings_angle = ? WHERE team_id = ?`, car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, int(car.SettingsAngle), car.TeamID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if _, err := s.db.ExecContext(ctx, `INSERT INTO car (team_id, aerodynamic, engine, chassis, floor, tyres, reliability, settings_angle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, car.TeamID, car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, int(car.SettingsAngle)); err != nil {
+				return err
+			}
+			return nil
+		}
 		return err
 	}
 	return nil
