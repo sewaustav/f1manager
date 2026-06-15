@@ -164,6 +164,68 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		}
 		fmt.Println(playerProfile)
 		
+		c.chooseEngine(ctx, players[i], team)
+		
+	}
+}
+
+func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team models.Team) {
+	engines, err := c.store.GetEngines(ctx)
+	if err != nil {
+		fmt.Println("failed to get engines:", err)
+		return
+	}
+	if team.IsManufacturer == models.Manufacture {
+		var price int
+		for _, e := range engines {
+			if e.Engine == team.ICE {
+				price = e.Price
+				break
+			}
+		}
+		if err := c.store.UpdateBudget(ctx, player.ID, price); err != nil {
+			fmt.Println("failed to update budget:", err)
+		}
+		return
+	} else {
+		tx, err := c.store.Begin(ctx)
+		if err != nil {
+			fmt.Println("failed to begin transaction:", err)
+			return
+		}
+		defer tx.Rollback()
+		
+		txRepo := c.store.WithTx(tx)
+		for _, e := range engines {
+			var engineName string
+			switch e.Engine {
+			case models.ICEName(0): engineName = "Ferrari"
+			case models.ICEName(1): engineName = "Mercedes"
+			case models.ICEName(2): engineName = "RBPT"
+			case models.ICEName(3): engineName = "Honda"
+			case models.ICEName(4): engineName = "Audi"
+			case models.ICEName(5): engineName = "BMW"
+			case models.ICEName(6): engineName = "Toyota"
+			case models.ICEName(7): engineName = "Cadillac"
+			case models.ICEName(8): engineName = "Renault"
+			case models.ICEName(9): engineName = "Self"
+			}
+			fmt.Println(e.ID, engineName)
+		}
+		var engineId int
+		fmt.Print("Выберете айди Engine: ")
+		fmt.Scanln(&engineId)
+		if err := txRepo.UpdateTeam(ctx, models.Team{ID: player.Team, ICE: models.ICEName(engineId)}); err != nil {
+			fmt.Println("failed to update budget:", err)
+		}
+		
+		if err := txRepo.UpdateBudget(ctx, player.ID, 0); err != nil {}
+		
+		if err := tx.Commit(); err != nil {
+			fmt.Println("failed to commit transaction:", err)
+			return
+		}
+		
 	}
 }
 

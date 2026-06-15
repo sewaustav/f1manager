@@ -2,10 +2,14 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"f1/internal/models"
 )
 
 type F1Repo interface {
+	Begin(ctx context.Context) (Tx, error)
+	WithTx(tx Tx) F1Repo
+	
 	GetPlayer(ctx context.Context, id int64) (models.PlayerProfile, error)
 	GetPlayers(ctx context.Context) ([]models.PlayerProfile, error)
 	GetTeam(ctx context.Context, teamID int64) (models.Team, error)
@@ -28,4 +32,19 @@ type F1Repo interface {
 	CreatePilots(ctx context.Context) error
 	CreateTeams(ctx context.Context) ([]models.Team, error)
 	GetActivePilots(ctx context.Context) ([]models.Pilot, error)
+	UpdateTeam(ctx context.Context, team models.Team) error
+	GetEngines(ctx context.Context) ([]models.Engine, error)
+}
+
+type DBTX interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+	PrepareContext(context.Context, string) (*sql.Stmt, error)
+	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
+}
+
+type Tx interface {
+	DBTX
+	Commit() error
+	Rollback() error
 }

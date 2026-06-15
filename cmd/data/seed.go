@@ -250,7 +250,7 @@ func (s *Seed) createTables() {
 	engineTable := `
 	CREATE TABLE IF NOT EXISTS engine (
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
-	    manufacturer TEXT,
+	    manufacturer INTEGER UNIQUE,
 	    price INTEGER,
 	    power INTEGER
 	)
@@ -292,7 +292,8 @@ func (s *Seed) createTables() {
 	    sim INTEGER,
 	    update_rtg INTEGER,
 	    is_manufacturer INTEGER,
-		budget INTEGER
+		budget INTEGER,
+		FOREIGN KEY(ice) REFERENCES engine(manufacturer)
 	)
 	`
 	

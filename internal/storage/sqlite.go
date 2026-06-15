@@ -8,14 +8,34 @@ import (
 	"fmt"
 )
 
-
-
 type SqliteF1Repo struct {
-	db *sql.DB
+	db DBTX
+	tx Tx
 }
 
 func NewSqliteF1Repo(db *sql.DB) *SqliteF1Repo {
 	return &SqliteF1Repo{db: db}
+}
+
+func (s *SqliteF1Repo) Begin(ctx context.Context) (Tx, error) {
+	base, ok := s.db.(*sql.DB)
+	if !ok {
+		return nil, fmt.Errorf("begin: underlying db is not *sql.DB")
+	}
+	
+	tx, err := base.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	
+	return tx, nil
+}
+
+func (s *SqliteF1Repo) WithTx(tx Tx) F1Repo {
+	return &SqliteF1Repo{
+		db: s.db,
+		tx: tx,
+	}
 }
 
 func (s *SqliteF1Repo) GetPlayers(ctx context.Context) ([]models.PlayerProfile, error) {
@@ -341,9 +361,12 @@ func (s *SqliteF1Repo) ExecuteTransfer(ctx context.Context, pilotID, fromTeamID,
 		return err
 	}
 	
-	tx, err := s.db.BeginTx(ctx, nil)
+	//tx, err := s.db.BeginTx(ctx, nil)
+	//if err != nil { return err }
+	//defer tx.Rollback()
+	
+	tx, err := s.Begin(ctx)
 	if err != nil { return err }
-	defer tx.Rollback()
 	
 	if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget - ? WHERE id = ?`, cost, teamID); err != nil {
 		return err
@@ -380,7 +403,7 @@ func (s *SqliteF1Repo) TeamPrincipalTransfer(ctx context.Context, teamPrincipalI
 		return fmt.Errorf("not enough money to transfer: %w", err)
 	}
 	
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.Begin(ctx)
 	if err != nil { return err }
 	defer tx.Rollback()
 	
@@ -473,4 +496,31 @@ func (s *SqliteF1Repo) GetActivePilots(ctx context.Context) ([]models.Pilot, err
 		pilots = append(pilots, p)
 	}
 	return pilots, nil
+}
+
+func (s *SqliteF1Repo) UpdateTeam(ctx context.Context, team models.Team) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE teams SET ice = ? WHERE id = ?`, team.ICE, team.ID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SqliteF1Repo) GetEngines(ctx context.Context) ([]models.Engine, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, manufacturer, price, power
+		FROM engine`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var engines []models.Engine
+	for rows.Next() {
+		var e models.Engine
+		if err := rows.Scan(&e.ID, &e.Engine, &e.Price, &e.BaseLevel); err != nil {
+			return nil, err
+		}
+		engines = append(engines, e)
+	}
+	return engines, nil
 }
