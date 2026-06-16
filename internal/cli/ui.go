@@ -478,6 +478,8 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		Snapshots:    snapshots,
 	})
 	
+	c.crossSeason(ctx)
+	
 }
 
 func (c *CLI) crossSeason(ctx context.Context) {
@@ -682,4 +684,18 @@ func (c *CLI) transfer(ctx context.Context, playerID, pilotID int64, amount int)
 	return nil
 }
 
-
+func (c *CLI) calcBudget(ctx context.Context) error {
+	players, err := c.store.GetPlayers(ctx)
+	if err != nil {
+		return err
+	}
+	
+	for _, p := range players {
+		fmt.Println(p)
+		//player, err := c.store.GetPlayer(ctx, p.ID)
+		//if err != nil {
+		//	return err
+		//}
+	}
+	return nil
+}
