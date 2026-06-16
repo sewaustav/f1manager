@@ -171,6 +171,7 @@ type Player struct {
 	TeamPrincipal int64
 	Team          int64
 	Budget        int
+	Tokens        int
 }
 
 type PlayerProfile struct {
@@ -181,6 +182,7 @@ type PlayerProfile struct {
 	Pilot1        string
 	Pilot2        string
 	Budget        int
+	Tokens        int
 }
 
 // Структуры для вывода результатов гонки

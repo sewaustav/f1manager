@@ -310,6 +310,7 @@ func (s *Seed) createTables() {
 -- 	    pilot2_id INTEGER,
 	    principal_id INTEGER,
 	    budget INTEGER,
+	    tokens INTEGER DEFAULT 120,
 	    FOREIGN KEY(team_id) REFERENCES teams(id),
 	    FOREIGN KEY(principal_id) REFERENCES teams_principals(id)
 	)

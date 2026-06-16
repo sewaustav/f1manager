@@ -44,9 +44,10 @@ func (c *CLI) Start(ctx context.Context) {
 		players[i].Name = strings.TrimSpace(name)
 	}
 	
+	
 	c.runDraft(ctx, players)
 	c.fillBotTeams(ctx)
-	c.configureSeason(ctx, players)
+	c.configureSeason(ctx)
 	c.runSimulation(ctx)
 }
 
@@ -70,7 +71,7 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		tID, _ := strconv.ParseInt(strings.TrimSpace(tIDStr), 10, 64)
 		players[i].Team = tID
 		
-		//fmt.Println(players[i])
+		fmt.Println(players[i])
 		
 		team, err := c.store.GetTeam(ctx, tID)
 		if err != nil {
@@ -164,7 +165,36 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		}
 		fmt.Println(playerProfile)
 		
-		c.chooseEngine(ctx, players[i], team)
+		
+		c.chooseEngine(ctx, models.Player{
+			ID: id,
+			Team: player.Team,
+		}, team)
+		
+		tokens, err := c.store.GetTokens(ctx, id)
+		if err != nil {
+			fmt.Println("Ошибка при получении токенов:", err)
+			continue
+		}
+		
+		budget, err = c.store.GetBudget(ctx, id)
+		if err != nil {
+			fmt.Println("Ошибка при получении бюджета:", err)
+			continue
+		}
+		
+		fmt.Println("У вас", tokens, "токенов")
+		fmt.Println("У вас", budget, "миллионов")
+		
+		var tokensToBy int
+		fmt.Print("Выберете количество токенов для покупки(1 миллион = 1 токен): ")
+		fmt.Scanln(&tokensToBy)
+		if tokensToBy != 0 {
+			c.buyTokens(ctx, models.Player{
+				ID: id,
+				Team: player.Team,
+			}, tokensToBy, 0)
+		}
 		
 	}
 }
@@ -183,6 +213,7 @@ func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team model
 				break
 			}
 		}
+		fmt.Printf("player.ID=%d\n", player.ID)
 		if err := c.store.UpdateBudget(ctx, player.ID, price); err != nil {
 			fmt.Println("failed to update budget:", err)
 		}
@@ -216,11 +247,11 @@ func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team model
 		fmt.Print("Выберете айди Engine: ")
 		fmt.Scanln(&engineId)
 		if err := txRepo.UpdateTeam(ctx, models.Team{ID: player.Team, ICE: models.ICEName(engineId)}); err != nil {
-			fmt.Println("failed to update budget:", err)
+			fmt.Println("failed to update budget1:", err)
 		}
 		
 		if err := txRepo.UpdateBudget(ctx, player.ID, engines[engineId].Price); err != nil {
-			fmt.Println("failed to update budget:", err)
+			fmt.Println("failed to update budget2:", err)
 		}
 		
 		if err := tx.Commit(); err != nil {
@@ -229,6 +260,38 @@ func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team model
 		}
 		
 	}
+}
+
+func (c *CLI) buyTokens(ctx context.Context, player models.Player, tokensToBuy, attempt int) {
+	currentBalance, err := c.store.GetBudget(ctx, player.ID)
+	if err != nil {
+		fmt.Println("failed to get budget:", err)
+		return
+	}
+	
+	fmt.Println("--------")
+	fmt.Printf("Current balance: %d\n", currentBalance)
+	fmt.Println("--------")
+	
+	if currentBalance < tokensToBuy {
+		fmt.Println("not enough tokens")
+		if attempt < 3 {
+			attempt++
+			c.buyTokens(ctx, player, tokensToBuy, attempt)
+		} else {
+			fmt.Println("failed to buy tokens")
+		}
+	}
+	
+	if err := c.store.UpdateBudget(ctx, player.ID, currentBalance-tokensToBuy); err != nil {
+		fmt.Println("failed to update budget:", err)
+	}
+	
+	if err := c.store.UpdateTokens(ctx, player.ID, currentBalance+tokensToBuy); err != nil {
+		fmt.Println("failed to update tokens:", err)
+	}
+	
+	return
 }
 
 func (c *CLI) fillBotTeams(ctx context.Context) {
@@ -260,7 +323,7 @@ func (c *CLI) fillBotTeams(ctx context.Context) {
 	}
 }
 
-func (c *CLI) putTokens() (int, int, int, int, int, int, models.SettingsAngle) {
+func (c *CLI) putTokens(attempt, tokens int) (int, int, int, int, int, int, models.SettingsAngle) {
 	var aeroDynamic, engineTokens, chassis, floor, tyres, reliability, angle int
 	fmt.Print("Токены на аэродинамику: ")
 	fmt.Scanln(&aeroDynamic)
@@ -277,24 +340,46 @@ func (c *CLI) putTokens() (int, int, int, int, int, int, models.SettingsAngle) {
 	fmt.Print("Настройка баланса: ")
 	fmt.Scanln(&angle)
 	
+	if aeroDynamic + engineTokens + chassis + floor + tyres + reliability + angle > tokens {
+		fmt.Println("Сумма токенов должна быть равна %d!", tokens)
+		if attempt < 3 {
+			attempt++
+			return c.putTokens(attempt + 1, tokens)
+		}
+		
+		return 20, 20, 20, 20, 20, 20, models.SettingsAngle(0)
+		
+	}
+	
 	return aeroDynamic, engineTokens, chassis, floor, tyres, reliability, models.SettingsAngle(angle)
 	
 }
 
-func (c *CLI) configureSeason(ctx context.Context, players []models.Player) {
+func (c *CLI) configureSeason(ctx context.Context) {
 	
 	fmt.Println("\n--- РАСПРЕДЕЛЕНИЕ ТОКЕНОВ НА СЕЗОН ---")
+	
+	players, err := c.store.GetPlayers(ctx)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	
+	fmt.Println(players)
+	
 	for _, p := range players {
-		fmt.Printf("\nИгрок %s, распределите 120 токенов на болид.\n", p.Name)
+		fmt.Println(p)
+		player, err := c.store.GetPlayer(ctx, p.ID)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		
+		fmt.Printf("\nИгрок %s, распределите %d токенов на болид.\n", player.Name, player.Tokens)
 		var car models.Car
 		car.TeamID = p.Team
 		
-		car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, car.SettingsAngle = c.putTokens()
-		
-		if car.Reliability + car.AeroDynamic + car.Engine + car.Chassis + car.Floor + car.Tyres > 120 {
-			fmt.Println("Сумма токенов должна быть равна 120!")
-			
-		}
+		car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, car.SettingsAngle = c.putTokens(0, player.Tokens)
 		
 		if err := c.store.UpdateCar(ctx, car); err != nil {
 			fmt.Println(err)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"f1/internal/models"
 	"fmt"
+	"strconv"
 )
 
 type SqliteF1Repo struct {
@@ -40,7 +41,7 @@ func (s *SqliteF1Repo) WithTx(tx Tx) F1Repo {
 
 func (s *SqliteF1Repo) GetPlayers(ctx context.Context) ([]models.PlayerProfile, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, team_id, budget, principal_id FROM players`)
+		SELECT id, name, team_id, budget, tokens, principal_id FROM players`)
 	if err != nil {
 		return nil, err
 	}
@@ -51,9 +52,12 @@ func (s *SqliteF1Repo) GetPlayers(ctx context.Context) ([]models.PlayerProfile, 
 		var p models.PlayerProfile
 		var pId int64
 		
-		if err := rows.Scan(&p.ID, &p.Name, &p.Team, &p.Budget, &pId); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Team, &p.Budget, &p.Tokens, &pId); err != nil {
 			return nil, err
 		}
+		
+		p.TeamPrincipal = strconv.FormatInt(pId, 10)
+		players = append(players, p)
 	}
 	return players, nil
 }
@@ -61,14 +65,14 @@ func (s *SqliteF1Repo) GetPlayers(ctx context.Context) ([]models.PlayerProfile, 
 func (s *SqliteF1Repo) GetPlayer(ctx context.Context, id int64) (models.PlayerProfile, error) {
 	var p models.PlayerProfile
 	var pId int64
-	row := s.db.QueryRowContext(ctx, `SELECT id, name, team_id, budget, principal_id FROM players WHERE id = ?`, id)
-	if err := row.Scan(&p.ID, &p.Name, &p.Team, &p.Budget, &pId); err != nil {
-		return models.PlayerProfile{}, err
+	row := s.db.QueryRowContext(ctx, `SELECT id, name, team_id, budget, tokens, principal_id FROM players WHERE id = ?`, id)
+	if err := row.Scan(&p.ID, &p.Name, &p.Team, &p.Budget, &p.Tokens, &pId); err != nil {
+		return models.PlayerProfile{}, fmt.Errorf("ошибка при получении игрока: %w", err)
 	}
 	
 	rows, err := s.db.QueryContext(ctx, `SELECT name FROM pilots WHERE team_id = ?`, id)
 	if err != nil {
-		return models.PlayerProfile{}, err
+		return models.PlayerProfile{}, fmt.Errorf("ошибка при получении пилотов: %w", err)
 	}
 	defer rows.Close()
 	
@@ -77,7 +81,7 @@ func (s *SqliteF1Repo) GetPlayer(ctx context.Context, id int64) (models.PlayerPr
 	for rows.Next() {
 		var pilotName string
 		if err := rows.Scan(&pilotName); err != nil {
-			return models.PlayerProfile{}, err
+			return models.PlayerProfile{}, fmt.Errorf("ошибка при получении пилотовd: %w", err)
 		}
 		pilots = append(pilots, pilotName)
 	}
@@ -87,7 +91,7 @@ func (s *SqliteF1Repo) GetPlayer(ctx context.Context, id int64) (models.PlayerPr
 	
 	rowsp := s.db.QueryRowContext(ctx, `SELECT name FROM teams_principals WHERE id = ?`, pId)
 	if err := rowsp.Scan(&p.TeamPrincipal); err != nil {
-		return models.PlayerProfile{}, err
+		return models.PlayerProfile{}, fmt.Errorf("ошибка при получении главного: %w", err)
 	}
 	
 	return p, nil
@@ -252,7 +256,7 @@ func (s *SqliteF1Repo) GetPilotTrack(ctx context.Context, pilotID, trackID int64
 }
 
 func (s *SqliteF1Repo) SavePlayer(ctx context.Context, player models.Player) (int64, error) {
-	pl, err := s.db.ExecContext(ctx, `INSERT INTO players (name, team_id, budget) VALUES (?, ?, ?)`, player.Name, player.Team, player.Budget)
+	pl, err := s.db.ExecContext(ctx, `INSERT INTO players (name, team_id, budget, tokens) VALUES (?, ?, ?, ?)`, player.Name, player.Team, player.Budget, 120)
 	if err != nil {
 		return 0, err
 	}
@@ -266,7 +270,7 @@ func (s *SqliteF1Repo) SavePlayer(ctx context.Context, player models.Player) (in
 }
 
 func (s *SqliteF1Repo) UpdateTeamTokensAndBudget(ctx context.Context, teamID int64, tokens, budget int) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE teams SET tokens = ?, budget = ? WHERE id = ?`, tokens, budget, teamID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE players SET tokens = ?, budget = ? WHERE id = ?`, tokens, budget, teamID); err != nil {
 		return err
 	}
 	return nil
@@ -361,9 +365,6 @@ func (s *SqliteF1Repo) ExecuteTransfer(ctx context.Context, pilotID, fromTeamID,
 		return err
 	}
 	
-	//tx, err := s.db.BeginTx(ctx, nil)
-	//if err != nil { return err }
-	//defer tx.Rollback()
 	
 	tx, err := s.Begin(ctx)
 	if err != nil { return err }
@@ -465,7 +466,7 @@ func (s *SqliteF1Repo) checkBudget(ctx context.Context, teamID int64, cost int) 
 
 func (s *SqliteF1Repo) UpdateBudget(ctx context.Context, playerID int64, cost int) error {
 	if err := s.checkBudget(ctx, playerID, cost); err != nil {
-		return err
+		return fmt.Errorf("вот где собака зарыта: %w", err)
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE players SET budget = budget - ? WHERE id = ?`, cost, playerID); err != nil {
 		return err
@@ -526,4 +527,19 @@ func (s *SqliteF1Repo) GetEngines(ctx context.Context) ([]models.Engine, error) 
 		engines = append(engines, e)
 	}
 	return engines, nil
+}
+
+func (s *SqliteF1Repo) GetTokens(ctx context.Context, playerID int64) (int, error) {
+	var tokens int
+	if err := s.db.QueryRowContext(ctx, `SELECT tokens FROM players WHERE id = ?`, playerID).Scan(&tokens); err != nil {
+		return 0, err
+	}
+	return tokens, nil
+}
+
+func (s *SqliteF1Repo) UpdateTokens(ctx context.Context, playerID int64, tokens int) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE players SET tokens = ? WHERE id = ?`, tokens, playerID); err != nil {
+		return err
+	}
+	return nil
 }

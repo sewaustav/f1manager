@@ -27,6 +27,8 @@ type F1Repo interface {
 	ResetSession(ctx context.Context) error
 	GetBudget(ctx context.Context, teamID int64) (int, error)
 	UpdateBudget(ctx context.Context, playerID int64, cost int) error
+	GetTokens(ctx context.Context, playerID int64) (int, error)
+	UpdateTokens(ctx context.Context, playerID int64, tokens int) error
 	UpdatePilot(ctx context.Context, pilot models.Pilot) error
 	UpdatePilotTrack(ctx context.Context, pt models.PilotTrack) error
 	CreatePilots(ctx context.Context) error
