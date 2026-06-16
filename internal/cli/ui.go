@@ -156,7 +156,7 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		fmt.Print("Выберете айди Team Principal: ")
 		principalIDStr, _ := c.reader.ReadString('\n')
 		principalID, _ := strconv.ParseInt(strings.TrimSpace(principalIDStr), 10, 64)
-		players[i].TeamPrincipal = principalID
+		players[i].TeamPrincipal = &principalID
 		if err := c.store.TeamPrincipalTransfer(ctx, principalID, 0, id, principals[principalID-1].Price); err != nil {
 			fmt.Println("Ошибка при выполнении трансфера Team Principal:", err)
 			continue
@@ -550,9 +550,8 @@ func (c *CLI) crossSeason(ctx context.Context) {
 		fmt.Println("4. Поменять главу: change_principal <your_id> <principal_id> <amount>")
 		fmt.Println("5. Начать сезон: start")
 		
-		var commandStr string
-		fmt.Scanln(&commandStr)
-		command := strings.Split(commandStr, " ")
+		commandStr, _ := c.reader.ReadString('\n')
+		command := strings.Fields(commandStr)
 		if command[0] == "start" {
 			for _, p := range players {
 				var tokensToBy int
@@ -579,8 +578,9 @@ func (c *CLI) crossSeason(ctx context.Context) {
 			}
 		} else if command[0] == "fire" {
 			playerID, _ := strconv.ParseInt(command[1], 10, 64)
-			pilotID, _ := strconv.ParseInt(command[2], 10, 64)
-			if err := c.store.FirePilot(ctx, playerID, pilotID); err != nil {
+			pilotID, _ := strconv.ParseInt(command[3], 10, 64)
+			fmt.Println(pilotID)
+			if err := c.store.Fire(ctx, playerID, pilotID, command[2]); err != nil {
 				fmt.Println(err)
 				continue
 			}
@@ -637,8 +637,10 @@ func (c *CLI) crossSeason(ctx context.Context) {
 				fmt.Println("You have team principal - fire first")
 			}
 			
+			isFree := false
+			
 			for _, pl := range players {
-				if *pl.TeamPrincipal == principalID {
+				if pl.TeamPrincipal != nil && *pl.TeamPrincipal == principalID {
 					fmt.Print("Игрок", pl.Name, ", игрок с айди ", playerID, "сделал предложение в размере", amount, "Принять? (y/n) ")
 					var confirm string
 					fmt.Scanln(&confirm)
@@ -646,7 +648,17 @@ func (c *CLI) crossSeason(ctx context.Context) {
 						if err := c.store.TeamPrincipalTransfer(ctx, principalID, pl.ID, playerID, amount); err != nil {
 							fmt.Println(err)
 						}
+					} else {
+						fmt.Println("Отказ")
 					}
+				} else {
+					isFree = true
+				}
+			}
+			
+			if isFree {
+				if err := c.store.TeamPrincipalTransfer(ctx, principalID, 0, playerID, amount); err != nil {
+					fmt.Println(err)
 				}
 			}
 			

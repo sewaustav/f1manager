@@ -169,6 +169,7 @@ func (s *Seed) createTables() {
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
 	    name TEXT,
 	    rating INTEGER,
+	    garage_id INTEGER,
 	    quali_rating INTEGER,
 	    style INTEGER,
 	    expirince INTEGER,
@@ -480,8 +481,8 @@ func (s *Seed) seedPilots(pilots []models.Pilot) error {
 	defer tx.Rollback()
 	
 	stmt, err := tx.Prepare(`
-		INSERT INTO pilots_initial (name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO pilots_initial (name, rating, garage_id, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -489,7 +490,7 @@ func (s *Seed) seedPilots(pilots []models.Pilot) error {
 	
 	for _, pl := range pilots {
 		vals := []interface{}{
-			pl.Name, pl.Rating, pl.QualifyingRating, int(pl.DrivingStyle), pl.Experience,
+			pl.Name, pl.Rating, pl.Garage, pl.QualifyingRating, int(pl.DrivingStyle), pl.Experience,
 			pl.Adaptiveness, int(pl.Emotions), int(pl.Stability), int(pl.Rain), int(pl.SettingsAngle),
 			pl.Starting, pl.TyreManagement, pl.MistakePossibility, pl.Price, pl.Sponsors,
 		}
@@ -737,6 +738,7 @@ func (s *Seed) parsePilotData() []models.Pilot {
 		}
 		
 		rating, _ := strconv.Atoi(row[1])
+		garage, _ := strconv.Atoi(row[15])
 		qualifyingRating, _ := strconv.Atoi(row[2])
 		style, _ := strconv.Atoi(row[3])
 		experience, _ := strconv.Atoi(row[4])
@@ -751,9 +753,12 @@ func (s *Seed) parsePilotData() []models.Pilot {
 		price, _ := strconv.Atoi(row[13])
 		sponsors, _ := strconv.Atoi(row[14])
 		
+		garageID := Ptr(int64(garage))
+		
 		pilotData = append(pilotData, models.Pilot{
 			Name: row[0],
 			Rating: rating,
+			Garage: garageID,
 			QualifyingRating: qualifyingRating,
 			DrivingStyle: models.DrivingStyle(style),
 			Experience: experience,
@@ -848,4 +853,8 @@ func (s *Seed) parsePilotTrackData() []models.PilotTrack {
 	}
 	
 	return pilotTrackData
+}
+
+func Ptr[T any](v T) *T {
+	return &v
 }

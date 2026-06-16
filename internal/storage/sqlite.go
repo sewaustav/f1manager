@@ -49,13 +49,19 @@ func (s *SqliteF1Repo) GetPlayers(ctx context.Context) ([]models.PlayerProfile, 
 	var players []models.PlayerProfile
 	for rows.Next() {
 		var p models.PlayerProfile
-		var pId int64
+		var pId sql.NullInt64
 		
 		if err := rows.Scan(&p.ID, &p.Name, &p.Team, &p.Budget, &p.Tokens, &pId); err != nil {
 			return nil, err
 		}
 		
-		p.TeamPrincipal = &pId
+		if pId.Valid {
+			id := pId.Int64
+			p.TeamPrincipal = &id
+		} else {
+			p.TeamPrincipal = nil
+		}
+		
 		players = append(players, p)
 	}
 	return players, nil
@@ -299,12 +305,12 @@ func (s *SqliteF1Repo) CreatePilots(ctx context.Context) error {
 	// Явно перечисляем колонки для пилотов
 	queryPilots := `
 		INSERT INTO pilots (
-			id, name, rating, quali_rating, style, expirince, 
+			id, name, garage_id, rating, quali_rating, style, expirince, 
 			adaptiveness, emotions, stability, rain, settings_angle, 
 			starting, tyre_management, mistake_possibility, price, sponsors
 		) 
 		SELECT 
-			id, name, rating, quali_rating, style, expirince, 
+			id, name, garage_id, rating, quali_rating, style, expirince, 
 			adaptiveness, emotions, stability, rain, settings_angle, 
 			starting, tyre_management, mistake_possibility, price, sponsors 
 		FROM pilots_initial`
@@ -537,25 +543,51 @@ func (s *SqliteF1Repo) UpdateTokens(ctx context.Context, playerID int64, tokens 
 	return nil
 }
 
-func (s *SqliteF1Repo) FirePilot(ctx context.Context, userID, pilotID int64) error {
-	
-	pilot, err := s.GetPilot(ctx, pilotID)
-	if err != nil { return err }
-	
-	
+func (s *SqliteF1Repo) Fire(ctx context.Context, userID, pilotID int64, who string) error {
 	tx, err := s.Begin(ctx)
-	if err != nil { return err }
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE pilots SET garage_id = NULL, team_id = NULL WHERE id = ?`, pilotID); err != nil {
+	if err != nil {
 		return err
+	}
+	defer tx.Rollback()
+	
+	if who == "pilot" {
+		pilot, err := s.GetPilot(ctx, pilotID)
+		if err != nil {
+			return fmt.Errorf("failed to get pilot: %w", err)
+		}
+		
+		
+		if _, err := tx.ExecContext(ctx, `UPDATE pilots SET garage_id = NULL, team_id = NULL WHERE id = ?`, pilotID); err != nil {
+			return fmt.Errorf("failed to update pilot: %w", err)
+		}
+		
+		if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget + ? - ? WHERE id = ?`, pilot.Price, pilot.Sponsors, userID); err != nil {
+			return fmt.Errorf("failed to update player: %w", err)
+		}
+		
+	} else if who == "principal" {
+		var principalPrice int
+		fmt.Println("------")
+		fmt.Println(pilotID)
+		fmt.Println("------")
+		if err := s.db.QueryRowContext(ctx, `SELECT price FROM teams_principals WHERE id = ?`, pilotID).Scan(&principalPrice); err != nil {
+			return fmt.Errorf("failed to get principal price: %w", err)
+		}
+		
+		if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget + ? WHERE id = ?`, principalPrice, userID); err != nil {
+			return fmt.Errorf("failed to update player: %w", err)
+		}
+		
+		if _, err := tx.ExecContext(ctx, `UPDATE players SET principal_id = NULL WHERE id = ?`, userID); err != nil {
+			return fmt.Errorf("failed to update principal: %w", err)
+		}
+	} else {
+		return fmt.Errorf("unknown who: %s", who)
 	}
 	
-	if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget + ? - ? WHERE id = ?`, pilot.Price, pilot.Sponsors, userID); err != nil {
-		return err
-	}
 	
 	if err := tx.Commit(); err != nil {
-		return err
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	return nil
 }

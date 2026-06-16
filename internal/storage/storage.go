@@ -36,7 +36,7 @@ type F1Repo interface {
 	GetActivePilots(ctx context.Context) ([]models.Pilot, error)
 	UpdateTeam(ctx context.Context, team models.Team) error
 	GetEngines(ctx context.Context) ([]models.Engine, error)
-	FirePilot(ctx context.Context, userID, pilotID int64) error
+	Fire(ctx context.Context, userID, pilotID int64, who string) error
 }
 
 type DBTX interface {

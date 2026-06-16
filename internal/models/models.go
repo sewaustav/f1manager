@@ -168,7 +168,7 @@ type Engine struct {
 type Player struct {
 	ID            int64
 	Name          string
-	TeamPrincipal int64
+	TeamPrincipal *int64
 	Team          int64
 	Budget        int
 	Tokens        int
