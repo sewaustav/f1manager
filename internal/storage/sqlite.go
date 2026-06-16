@@ -543,3 +543,26 @@ func (s *SqliteF1Repo) UpdateTokens(ctx context.Context, playerID int64, tokens 
 	}
 	return nil
 }
+
+func (s *SqliteF1Repo) FirePilot(ctx context.Context, userID, pilotID int64) error {
+	
+	pilot, err := s.GetPilot(ctx, pilotID)
+	if err != nil { return err }
+	
+	
+	tx, err := s.Begin(ctx)
+	if err != nil { return err }
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE pilots SET garage_id = NULL, team_id = NULL WHERE id = ?`, pilotID); err != nil {
+		return err
+	}
+	
+	if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget + ? - ? WHERE id = ?`, pilot.Price, pilot.Sponsors, userID); err != nil {
+		return err
+	}
+	
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}

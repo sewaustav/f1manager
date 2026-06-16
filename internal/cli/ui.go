@@ -479,3 +479,128 @@ func (c *CLI) runSimulation(ctx context.Context) {
 	})
 	
 }
+
+func (c *CLI) crossSeason(ctx context.Context) {
+	pilots, err := c.store.GetPilots(ctx)
+	if err != nil {
+		fmt.Println("Ошибка при получении списка пилотов:", err)
+		return
+	}
+	players, err := c.store.GetPlayers(ctx)
+	if err != nil {
+		fmt.Println("Ошибка при получении списка игроков:", err)
+		return
+	}
+	principals, err := c.store.GetTeamPrincipals(ctx)
+	if err != nil {
+		fmt.Println("Ошибка при получении списка руководителей команд:", err)
+		return
+	}
+	
+	engines, err := c.store.GetEngines(ctx)
+	if err != nil {
+		fmt.Println("Ошибка при получении списка двигателей:", err)
+		return
+	}
+	
+	var newSeason string
+	fmt.Print("Сезон завершен! Начать новый? (y/n): ")
+	fmt.Scanln(&newSeason)
+	if newSeason != "y" {
+		return
+	}
+	
+	for {
+		for _, player := range players {
+			fmt.Println("Игрок: ", player.Name, "Бюджет: ", player.Budget, "Остальное: ", player.TeamPrincipal)
+		}
+		for _, pilot := range pilots {
+			fmt.Println("Пилот: ", pilot.Name, "Команда: ", pilot.Team)
+		}
+		
+		for _, principal := range principals { 
+			fmt.Println(principal.ID, "Глава команды: ", principal.Name)
+		}
+		
+		for _, e := range engines {
+			var engineName string
+			switch e.Engine {
+			case models.ICEName(0): engineName = "Ferrari"
+			case models.ICEName(1): engineName = "Mercedes"
+			case models.ICEName(2): engineName = "RBPT"
+			case models.ICEName(3): engineName = "Honda"
+			case models.ICEName(4): engineName = "Audi"
+			case models.ICEName(5): engineName = "BMW"
+			case models.ICEName(6): engineName = "Toyota"
+			case models.ICEName(7): engineName = "Cadillac"
+			case models.ICEName(8): engineName = "Renault"
+			case models.ICEName(9): engineName = "Self"
+			}
+			fmt.Println(e.ID, "Двигатель: ", engineName, e.BaseLevel, e.Price)
+		}
+		
+		fmt.Println("\n========================================")
+		fmt.Println("Доступные команды: ")
+		fmt.Println("1. Трансфер: transfer <your_id> <pilot_id> <amount>")
+		fmt.Println("2. Увольнение пилота: fire <your_id> pilot/principal <pilot_id/principal_id>")
+		fmt.Println("3. Поменять мотор: engine <your_id> <engine_id>")
+		fmt.Println("4. Поменять главу: change_principal <your_id> <principal_id> <amount>")
+		fmt.Println("5. Начать сезон: start")
+		
+		var commandStr string
+		fmt.Scanln(&commandStr)
+		command := strings.Split(commandStr, " ")
+		if command[0] == "start" {
+			c.runSimulation(ctx)
+			return
+		} else if command[0] == "transfer" {
+			playerID, _ := strconv.ParseInt(command[1], 10, 64)
+			pilotID, _ := strconv.ParseInt(command[2], 10, 64)
+			amount, _ := strconv.Atoi(command[3])
+			if err := c.transfer(ctx, playerID, pilotID, amount); err != nil {
+				fmt.Println(err)
+				continue
+			}
+		} else if command[0] == "fire" {
+			playerID, _ := strconv.ParseInt(command[1], 10, 64)
+			pilotID, _ := strconv.ParseInt(command[2], 10, 64)
+			if err := c.store.FirePilot(ctx, playerID, pilotID); err != nil {
+				fmt.Println(err)
+				continue
+			}
+		} else if command[0] == "engine" {
+			
+		} else if command[0] == "change_principal" {}
+		
+		
+	}
+}
+
+func (c *CLI) transfer(ctx context.Context, playerID, pilotID int64, amount int) error {
+	pilot, err := c.store.GetPilot(ctx, pilotID)
+	if err != nil {
+		return err
+	}
+	if pilot.Team == nil || *pilot.Team == 0 {
+		if pilot.Price-pilot.Sponsors > amount+5 {
+			return fmt.Errorf("not enough funds")
+		}
+		if err := c.store.ExecuteTransfer(ctx, pilotID, 0, playerID, amount); err != nil {
+			return err
+		}
+		return nil
+	}
+	
+	var confirm string 
+	fmt.Println("Игрок ", pilot.Team, "Вы принимаете предложение от игрока ", playerID, "за пилота ", pilot.Name, "в размере ", amount, "? (y/n)")
+	fmt.Scanln(&confirm)
+	if confirm != "y" {
+		return fmt.Errorf("user declined")
+	}
+	if err := c.store.ExecuteTransfer(ctx, pilotID, *pilot.Team, playerID, amount); err != nil {
+		return err
+	}
+	
+	return nil
+}
+
