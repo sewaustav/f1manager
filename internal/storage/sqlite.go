@@ -538,7 +538,7 @@ func (s *SqliteF1Repo) GetTokens(ctx context.Context, playerID int64) (int, erro
 }
 
 func (s *SqliteF1Repo) UpdateTokens(ctx context.Context, playerID int64, tokens int) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE players SET tokens = ? WHERE id = ?`, tokens, playerID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE players SET tokens = tokens + ? WHERE id = ?`, tokens, playerID); err != nil {
 		return err
 	}
 	return nil

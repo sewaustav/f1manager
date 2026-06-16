@@ -113,14 +113,16 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		p1IDStr, _ := c.reader.ReadString('\n')
 		p1ID, _ := strconv.ParseInt(strings.TrimSpace(p1IDStr), 10, 64)
 		
-		if pilots[p1ID].Sponsors != 0 {
-			if err = c.store.UpdateBudget(ctx, id, pilots[p1ID].Sponsors); err != nil {
+		if pilots[p1ID-1].Sponsors != 0 {
+			fmt.Println(pilots[p1ID-1].Sponsors)
+			if err = c.store.UpdateBudget(ctx, id, pilots[p1ID-1].Sponsors*(-1)); err != nil {
 				fmt.Println("Ошибка при обновлении бюджета:", err)
 				continue
 			}
 			budget, err = c.store.GetBudget(ctx, id)
 		}
-		if err = c.store.ExecuteTransfer(ctx, p1ID, 0, id, pilots[p1ID].Price); err != nil {
+		fmt.Println(pilots[p1ID-1].Price)
+		if err = c.store.ExecuteTransfer(ctx, p1ID, 0, id, pilots[p1ID-1].Price); err != nil {
 			fmt.Println("Ошибка при выполнении трансфера:", err)
 			continue
 		}
@@ -129,14 +131,16 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		p2IDStr, _ := c.reader.ReadString('\n')
 		p2ID, _ := strconv.ParseInt(strings.TrimSpace(p2IDStr), 10, 64)
 		
-		if pilots[p2ID].Sponsors != 0 {
-			if err = c.store.UpdateBudget(ctx, id, pilots[p2ID].Sponsors); err != nil {
+		if pilots[p2ID-1].Sponsors != 0 {
+			fmt.Println(pilots[p2ID-1].Sponsors)
+			if err = c.store.UpdateBudget(ctx, id, pilots[p2ID-1].Sponsors*(-1)); err != nil {
 				fmt.Println("Ошибка при обновлении бюджета:", err)
 				continue
 			}
 			budget, err = c.store.GetBudget(ctx, id)
 		}
-		if err = c.store.ExecuteTransfer(ctx, p2ID, 0, id, pilots[p2ID].Price); err != nil {
+		fmt.Println(pilots[p2ID-1].Price)
+		if err = c.store.ExecuteTransfer(ctx, p2ID, 0, id, pilots[p2ID-1].Price); err != nil {
 			fmt.Println("Ошибка при выполнении трансфера:", err)
 			continue
 		}
@@ -153,7 +157,7 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		principalIDStr, _ := c.reader.ReadString('\n')
 		principalID, _ := strconv.ParseInt(strings.TrimSpace(principalIDStr), 10, 64)
 		players[i].TeamPrincipal = principalID
-		if err := c.store.TeamPrincipalTransfer(ctx, principalID, 0, id, principals[principalID].Price); err != nil {
+		if err := c.store.TeamPrincipalTransfer(ctx, principalID, 0, id, principals[principalID-1].Price); err != nil {
 			fmt.Println("Ошибка при выполнении трансфера Team Principal:", err)
 			continue
 		}
@@ -214,6 +218,7 @@ func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team model
 			}
 		}
 		fmt.Printf("player.ID=%d\n", player.ID)
+		fmt.Println(price)
 		if err := c.store.UpdateBudget(ctx, player.ID, price); err != nil {
 			fmt.Println("failed to update budget:", err)
 		}
@@ -283,11 +288,11 @@ func (c *CLI) buyTokens(ctx context.Context, player models.Player, tokensToBuy, 
 		}
 	}
 	
-	if err := c.store.UpdateBudget(ctx, player.ID, currentBalance-tokensToBuy); err != nil {
+	if err := c.store.UpdateBudget(ctx, player.ID, tokensToBuy); err != nil {
 		fmt.Println("failed to update budget:", err)
 	}
 	
-	if err := c.store.UpdateTokens(ctx, player.ID, currentBalance+tokensToBuy); err != nil {
+	if err := c.store.UpdateTokens(ctx, player.ID, tokensToBuy); err != nil {
 		fmt.Println("failed to update tokens:", err)
 	}
 	
@@ -340,7 +345,7 @@ func (c *CLI) putTokens(attempt, tokens int) (int, int, int, int, int, int, mode
 	fmt.Print("Настройка баланса: ")
 	fmt.Scanln(&angle)
 	
-	if aeroDynamic + engineTokens + chassis + floor + tyres + reliability + angle > tokens {
+	if aeroDynamic + engineTokens + chassis + floor + tyres + reliability > tokens {
 		fmt.Println("Сумма токенов должна быть равна %d!", tokens)
 		if attempt < 3 {
 			attempt++
