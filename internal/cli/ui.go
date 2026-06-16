@@ -481,27 +481,6 @@ func (c *CLI) runSimulation(ctx context.Context) {
 }
 
 func (c *CLI) crossSeason(ctx context.Context) {
-	pilots, err := c.store.GetPilots(ctx)
-	if err != nil {
-		fmt.Println("Ошибка при получении списка пилотов:", err)
-		return
-	}
-	players, err := c.store.GetPlayers(ctx)
-	if err != nil {
-		fmt.Println("Ошибка при получении списка игроков:", err)
-		return
-	}
-	principals, err := c.store.GetTeamPrincipals(ctx)
-	if err != nil {
-		fmt.Println("Ошибка при получении списка руководителей команд:", err)
-		return
-	}
-	
-	engines, err := c.store.GetEngines(ctx)
-	if err != nil {
-		fmt.Println("Ошибка при получении списка двигателей:", err)
-		return
-	}
 	
 	var newSeason string
 	fmt.Print("Сезон завершен! Начать новый? (y/n): ")
@@ -511,6 +490,28 @@ func (c *CLI) crossSeason(ctx context.Context) {
 	}
 	
 	for {
+		pilots, err := c.store.GetPilots(ctx)
+		if err != nil {
+			fmt.Println("Ошибка при получении списка пилотов:", err)
+			return
+		}
+		players, err := c.store.GetPlayers(ctx)
+		if err != nil {
+			fmt.Println("Ошибка при получении списка игроков:", err)
+			return
+		}
+		principals, err := c.store.GetTeamPrincipals(ctx)
+		if err != nil {
+			fmt.Println("Ошибка при получении списка руководителей команд:", err)
+			return
+		}
+		
+		engines, err := c.store.GetEngines(ctx)
+		if err != nil {
+			fmt.Println("Ошибка при получении списка двигателей:", err)
+			return
+		}
+		
 		for _, player := range players {
 			fmt.Println("Игрок: ", player.Name, "Бюджет: ", player.Budget, "Остальное: ", player.TeamPrincipal)
 		}
@@ -551,6 +552,19 @@ func (c *CLI) crossSeason(ctx context.Context) {
 		fmt.Scanln(&commandStr)
 		command := strings.Split(commandStr, " ")
 		if command[0] == "start" {
+			for _, p := range players {
+				var tokensToBy int
+				fmt.Print("Выберете количество токенов для покупки(1 миллион = 1 токен): ")
+				fmt.Scanln(&tokensToBy)
+				if tokensToBy != 0 {
+					c.buyTokens(ctx, models.Player{
+						ID: p.ID,
+						Team: p.Team,
+					}, tokensToBy, 0)
+				}
+			}
+			c.fillBotTeams(ctx)
+			c.configureSeason(ctx)
 			c.runSimulation(ctx)
 			return
 		} else if command[0] == "transfer" {
@@ -569,8 +583,72 @@ func (c *CLI) crossSeason(ctx context.Context) {
 				continue
 			}
 		} else if command[0] == "engine" {
+			playerID, _ := strconv.ParseInt(command[1], 10, 64)
+			engineID, _ := strconv.ParseInt(command[2], 10, 64)
+			player, err := c.store.GetPlayer(ctx, playerID)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
 			
-		} else if command[0] == "change_principal" {}
+			enginePrice := engines[engineID].Price
+			team, err := c.store.GetTeam(ctx, player.Team)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			if team.IsManufacturer == models.Manufacture {
+				fmt.Println("you are manufacturer")
+				continue
+			}
+			var currentPrice int 
+			for _, e := range engines {
+				if e.Engine == team.ICE {
+					currentPrice = e.Price
+				}
+			}
+			
+			if currentPrice < enginePrice {
+				if player.Budget < enginePrice-currentPrice {
+					fmt.Println("not enough funds")
+					continue
+				}
+			}
+			if err := c.store.UpdateTeam(ctx, models.Team{
+				ID:  player.Team,
+				ICE: models.ICEName(engineID),
+			}); err != nil {
+				fmt.Println(err)
+				continue
+			}
+			
+		} else if command[0] == "change_principal" {
+			playerID, _ := strconv.ParseInt(command[1], 10, 64)
+			principalID, _ := strconv.ParseInt(command[2], 10, 64)
+			amount, _ := strconv.Atoi(command[3])
+			player, err := c.store.GetPlayer(ctx, playerID)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			if player.TeamPrincipal != nil {
+				fmt.Println("You have team principal - fire first")
+			}
+			
+			for _, pl := range players {
+				if *pl.TeamPrincipal == principalID {
+					fmt.Print("Игрок", pl.Name, ", игрок с айди ", playerID, "сделал предложение в размере", amount, "Принять? (y/n) ")
+					var confirm string
+					fmt.Scanln(&confirm)
+					if confirm == "y" {
+						if err := c.store.TeamPrincipalTransfer(ctx, principalID, pl.ID, playerID, amount); err != nil {
+							fmt.Println(err)
+						}
+					}
+				}
+			}
+			
+		}
 		
 		
 	}
@@ -603,4 +681,5 @@ func (c *CLI) transfer(ctx context.Context, playerID, pilotID int64, amount int)
 	
 	return nil
 }
+
 

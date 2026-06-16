@@ -177,7 +177,7 @@ type Player struct {
 type PlayerProfile struct {
 	ID            int64
 	Name          string
-	TeamPrincipal string
+	TeamPrincipal *int64
 	Team          int64
 	Pilot1        string
 	Pilot2        string

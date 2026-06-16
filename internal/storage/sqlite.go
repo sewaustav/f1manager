@@ -6,7 +6,6 @@ import (
 	"errors"
 	"f1/internal/models"
 	"fmt"
-	"strconv"
 )
 
 type SqliteF1Repo struct {
@@ -56,7 +55,7 @@ func (s *SqliteF1Repo) GetPlayers(ctx context.Context) ([]models.PlayerProfile, 
 			return nil, err
 		}
 		
-		p.TeamPrincipal = strconv.FormatInt(pId, 10)
+		p.TeamPrincipal = &pId
 		players = append(players, p)
 	}
 	return players, nil
@@ -64,9 +63,8 @@ func (s *SqliteF1Repo) GetPlayers(ctx context.Context) ([]models.PlayerProfile, 
 
 func (s *SqliteF1Repo) GetPlayer(ctx context.Context, id int64) (models.PlayerProfile, error) {
 	var p models.PlayerProfile
-	var pId int64
 	row := s.db.QueryRowContext(ctx, `SELECT id, name, team_id, budget, tokens, principal_id FROM players WHERE id = ?`, id)
-	if err := row.Scan(&p.ID, &p.Name, &p.Team, &p.Budget, &p.Tokens, &pId); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Team, &p.Budget, &p.Tokens, &p.TeamPrincipal); err != nil {
 		return models.PlayerProfile{}, fmt.Errorf("ошибка при получении игрока: %w", err)
 	}
 	
@@ -88,11 +86,6 @@ func (s *SqliteF1Repo) GetPlayer(ctx context.Context, id int64) (models.PlayerPr
 	
 	p.Pilot1 = pilots[0]
 	p.Pilot2 = pilots[1]
-	
-	rowsp := s.db.QueryRowContext(ctx, `SELECT name FROM teams_principals WHERE id = ?`, pId)
-	if err := rowsp.Scan(&p.TeamPrincipal); err != nil {
-		return models.PlayerProfile{}, fmt.Errorf("ошибка при получении главного: %w", err)
-	}
 	
 	return p, nil
 }
