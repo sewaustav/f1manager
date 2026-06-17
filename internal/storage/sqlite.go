@@ -608,3 +608,27 @@ func (s *SqliteF1Repo) Fire(ctx context.Context, userID, pilotID int64, who stri
 	}
 	return nil
 }
+
+func (s *SqliteF1Repo) NewSeasonCar(ctx context.Context, newLevel int, teamID int64) error {
+
+	if _, err := s.db.ExecContext(ctx, `UPDATE players SET car_lvl = ? WHERE id = ?`, newLevel, teamID); err != nil {
+		return err
+	}
+	return nil
+} 
+
+func (s *SqliteF1Repo) GetCar(ctx context.Context, teamID int64) (models.Car, error) {
+	var car models.Car
+	if err := s.db.QueryRowContext(ctx, `SELECT aerodynamic, engine, chassis, floor, tyres, reliability, settings_angle FROM car WHERE team_id = ?`, teamID).Scan(&car.AeroDynamic, &car.Engine, &car.Chassis, &car.Floor, &car.Tyres, &car.Reliability, &car.SettingsAngle); err != nil {
+		return car, err
+	}
+	return car, nil
+}
+
+func (s *SqliteF1Repo) GetTeamPrincipal(ctx context.Context, principalID int64) (models.TeamPrincipal, error) {
+	var principal models.TeamPrincipal
+	if err := s.db.QueryRowContext(ctx, `SELECT id, name, price, level FROM teams_principals WHERE id = ?`, principalID).Scan(&principal.ID, &principal.Name, &principal.Price, &principal.Level); err != nil {
+		return principal, err
+	}
+	return principal, nil
+}

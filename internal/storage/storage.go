@@ -37,6 +37,9 @@ type F1Repo interface {
 	UpdateTeam(ctx context.Context, team models.Team) error
 	GetEngines(ctx context.Context) ([]models.Engine, error)
 	Fire(ctx context.Context, userID, pilotID int64, who string) error
+	NewSeasonCar(ctx context.Context, newLevel int, teamID int64) error
+	GetCar(ctx context.Context, teamID int64) (models.Car, error)
+	GetTeamPrincipal(ctx context.Context, principalID int64) (models.TeamPrincipal, error)
 }
 
 type DBTX interface {
