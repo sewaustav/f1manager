@@ -333,15 +333,32 @@ func (s *SqliteF1Repo) CreatePilots(ctx context.Context) error {
 }
 
 func (s *SqliteF1Repo) UpdateCar(ctx context.Context, car models.Car) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE car SET aerodynamic = ?, engine = ?, chassis = ?, floor = ?, tyres = ?, reliability = ?, settings_angle = ? WHERE team_id = ?`, car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, int(car.SettingsAngle), car.TeamID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			if _, err := s.db.ExecContext(ctx, `INSERT INTO car (team_id, aerodynamic, engine, chassis, floor, tyres, reliability, settings_angle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, car.TeamID, car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, int(car.SettingsAngle)); err != nil {
-				return err
-			}
-			return nil
-		}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE car 
+		SET aerodynamic = ?, engine = ?, chassis = ?, floor = ?, tyres = ?, reliability = ?, settings_angle = ? 
+		WHERE team_id = ?`,
+		car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, int(car.SettingsAngle), car.TeamID,
+	)
+	if err != nil {
 		return err
 	}
+	
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	
+	if rowsAffected == 0 {
+		_, err := s.db.ExecContext(ctx, `
+			INSERT INTO car (team_id, aerodynamic, engine, chassis, floor, tyres, reliability, settings_angle) 
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			car.TeamID, car.AeroDynamic, car.Engine, car.Chassis, car.Floor, car.Tyres, car.Reliability, int(car.SettingsAngle),
+		)
+		if err != nil {
+			return err
+		}
+	}
+	
 	return nil
 }
 
@@ -476,7 +493,7 @@ func (s *SqliteF1Repo) UpdateBudget(ctx context.Context, playerID int64, cost in
 func (s *SqliteF1Repo) GetActivePilots(ctx context.Context) ([]models.Pilot, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, rating, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors, team_id, garage_id
-		FROM pilots WHERE garage_id IS NOT NULL`)
+		FROM pilots WHERE garage_id > 0`)
 	if err != nil {
 		return nil, err
 	}
