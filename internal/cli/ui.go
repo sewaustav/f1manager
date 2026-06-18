@@ -158,8 +158,15 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		fmt.Print("Выберете айди Team Principal: ")
 		principalIDStr, _ := c.reader.ReadString('\n')
 		principalID, _ := strconv.ParseInt(strings.TrimSpace(principalIDStr), 10, 64)
+		fmt.Println(principals[principalID-1].Price)
+		teamPrincipal, err := c.store.GetTeamPrincipal(ctx, principalID)
+		if err != nil {
+			fmt.Println("Ошибка при получении Team Principal:", err)
+			continue
+		}
+		fmt.Println(teamPrincipal)
 		players[i].TeamPrincipal = &principalID
-		if err := c.store.TeamPrincipalTransfer(ctx, principalID, 0, id, principals[principalID-1].Price); err != nil {
+		if err := c.store.TeamPrincipalTransfer(ctx, principalID, 0, id, teamPrincipal.Price); err != nil {
 			fmt.Println("Ошибка при выполнении трансфера Team Principal:", err)
 			continue
 		}
@@ -225,6 +232,65 @@ func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team model
 			fmt.Println("failed to update budget:", err)
 		}
 		return
+	} else if team.IsManufacturer == models.Semi {
+		fmt.Print("Хотите использовать текущую конфигурацию или стать клиентом?")
+		var answ string
+		fmt.Scan(&answ)
+		if answ == "да" {
+			var price int
+			for _, e := range engines {
+				if e.Engine == team.ICE {
+					price = e.Price
+					break
+				}
+			}
+			if err := c.store.UpdateBudget(ctx, player.ID, price); err != nil {
+				fmt.Println("Ошибка при установке бюджета:", err)
+				return
+			}
+		} else {
+			tx, err := c.store.Begin(ctx)
+			if err != nil {
+				fmt.Println("failed to begin transaction:", err)
+				return
+			}
+			defer tx.Rollback()
+			
+			txRepo := c.store.WithTx(tx)
+			for _, e := range engines {
+				var engineName string
+				switch e.Engine {
+				case models.ICEName(0): engineName = "Ferrari"
+				case models.ICEName(1): engineName = "Mercedes"
+				case models.ICEName(2): engineName = "RBPT"
+				case models.ICEName(3): engineName = "Honda"
+				case models.ICEName(4): engineName = "Audi"
+				case models.ICEName(5): engineName = "BMW"
+				case models.ICEName(6): engineName = "Toyota"
+				case models.ICEName(7): engineName = "Cadillac"
+				case models.ICEName(8): engineName = "Renault"
+				case models.ICEName(9): engineName = "Self"
+				}
+				fmt.Println(e.ID, engineName)
+			}
+			var engineId int
+			fmt.Print("Выберете айди Engine: ")
+			fmt.Scanln(&engineId)
+			fmt.Println(engineId)
+			if err := txRepo.UpdateTeam(ctx, models.Team{ID: player.Team, ICE: models.ICEName(engineId-1)}); err != nil {
+				fmt.Println("failed to update budget1:", err)
+			}
+			
+			if err := txRepo.UpdateBudget(ctx, player.ID, engines[engineId-1].Price+10); err != nil {
+				fmt.Println("failed to update budget2:", err)
+			}
+			
+			if err := tx.Commit(); err != nil {
+				fmt.Println("failed to commit transaction:", err)
+				return
+			}
+		}
+		
 	} else {
 		tx, err := c.store.Begin(ctx)
 		if err != nil {
@@ -253,11 +319,11 @@ func (c *CLI) chooseEngine(ctx context.Context, player models.Player, team model
 		var engineId int
 		fmt.Print("Выберете айди Engine: ")
 		fmt.Scanln(&engineId)
-		if err := txRepo.UpdateTeam(ctx, models.Team{ID: player.Team, ICE: models.ICEName(engineId)}); err != nil {
+		if err := txRepo.UpdateTeam(ctx, models.Team{ID: player.Team, ICE: models.ICEName(engineId-1)}); err != nil {
 			fmt.Println("failed to update budget1:", err)
 		}
 		
-		if err := txRepo.UpdateBudget(ctx, player.ID, engines[engineId].Price); err != nil {
+		if err := txRepo.UpdateBudget(ctx, player.ID, engines[engineId-1].Price+10); err != nil {
 			fmt.Println("failed to update budget2:", err)
 		}
 		
@@ -529,8 +595,58 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		Snapshots:    snapshots,
 	})
 	
+	c.resetTokensAndBudget(ctx)
 	c.crossSeason(ctx)
 	
+}
+
+func (c *CLI) resetTokensAndBudget(ctx context.Context) {
+	pilots, err := c.store.GetPilots(ctx)
+	if err != nil {
+		fmt.Println("Ошибка при получении списка пилотов:", err)
+		return
+	}
+	
+	players, err := c.store.GetPlayers(ctx)
+	if err != nil {
+		fmt.Println("Ошибка при получении списка игроков:", err)
+		return
+	}
+	for _, pl := range players {
+		budget := 0
+		for _, p := range pilots {
+			if p.Team != nil && *p.Team == pl.ID {
+				budget = budget + p.Price - p.Sponsors
+				fmt.Println(pl.ID, "budget", budget)
+			}
+		}
+		if pl.TeamPrincipal != nil {
+			principal, err := c.store.GetTeamPrincipal(ctx, *pl.TeamPrincipal)
+			if err != nil {
+				fmt.Println("Ошибка при получении руководителя команды:", err)
+				return
+			}
+			budget = budget + principal.Price
+			fmt.Println(pl.ID, "budget", budget)
+		}	
+		team, err := c.store.GetTeam(ctx, pl.Team)
+		if err != nil {
+			fmt.Println("Ошибка при получении команды:", err)
+			return
+		}
+		ice, err := c.store.GetEngine(ctx, int64(team.ICE))
+		if err != nil {
+			fmt.Println("Ошибка при получении двигателя:", err)
+			return
+		}
+		budget = budget + ice.Price
+		fmt.Println(pl.ID, "budget", budget)
+		fmt.Println(team.Budget-budget)
+		if err := c.store.SetBudget(ctx, pl.ID, team.Budget-budget); err != nil {
+			fmt.Println("Ошибка при установке бюджета:", err)
+			return
+		}
+	}
 }
 
 func (c *CLI) crossSeason(ctx context.Context) {
@@ -751,23 +867,7 @@ func (c *CLI) transfer(ctx context.Context, playerID, pilotID int64, amount int)
 	return nil
 }
 
-func (c *CLI) calcBudget(ctx context.Context) error {
-	players, err := c.store.GetPlayers(ctx)
-	if err != nil {
-		return err
-	}
-	
-	for _, p := range players {
-		fmt.Println(p)
-		//player, err := c.store.GetPlayer(ctx, p.ID)
-		//if err != nil {
-		//	return err
-		//}
-	}
-	return nil
-}
-
-func diminishingReturn(x float64) float64 {
+func (c *CLI) diminishingReturn(x float64) float64 {
 	const coefficient = 3.162277
 	
 	return coefficient * math.Sqrt(x)
@@ -792,7 +892,11 @@ func (c *CLI) buildCarForNextSeason(ctx context.Context) error {
 		fmt.Println("Сколько вы хотите вложить в болид?")
 		var amount int
 		fmt.Scanln(&amount)
-		bonus := diminishingReturn(float64(amount))
+		bonus := c.diminishingReturn(float64(amount))
+		fmt.Println(newCarLvl+int(bonus))
+		fmt.Println("bonus", bonus)
+		fmt.Println("newCarLvl", newCarLvl)
+		fmt.Println("newCarLvl+int(bonus)", newCarLvl+int(bonus))
 		if err := c.store.NewSeasonCar(ctx, newCarLvl+int(bonus), team.ID); err != nil {
 			fmt.Println("error building car", err)
 		}

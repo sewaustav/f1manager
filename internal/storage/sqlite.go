@@ -423,12 +423,20 @@ func (s *SqliteF1Repo) TeamPrincipalTransfer(ctx context.Context, teamPrincipalI
 	tx, err := s.Begin(ctx)
 	if err != nil { return err }
 	defer tx.Rollback()
-	
-	if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget - ? WHERE id = ?`, cost, fromTeamID); err != nil {
+	var budget int
+	if err := tx.QueryRowContext(ctx, `SELECT budget FROM players WHERE id = ?`, teamID).Scan(&budget); err != nil {
+		return fmt.Errorf("failed to get budget: %w", err)
+	}
+	fmt.Println(budget)
+	if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget - ? WHERE id = ?`, cost, teamID); err != nil {
 		return fmt.Errorf("hhahahah %w", err)
 	}
+	if err := tx.QueryRowContext(ctx, `SELECT budget FROM players WHERE id = ?`, teamID).Scan(&budget); err != nil {
+		return fmt.Errorf("failed to get budget: %w", err)
+	}
+	fmt.Println(budget)
 	if fromTeamID > 0 {
-		_, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget + ? WHERE id = ?`, cost, teamID)
+		_, err := tx.ExecContext(ctx, `UPDATE players SET budget = budget + ? WHERE id = ?`, cost, fromTeamID)
 		if err != nil {
 			return fmt.Errorf("tttttt %w", err)
 		}
@@ -545,6 +553,14 @@ func (s *SqliteF1Repo) GetEngines(ctx context.Context) ([]models.Engine, error) 
 	return engines, nil
 }
 
+func (s *SqliteF1Repo) GetEngine(ctx context.Context, id int64) (models.Engine, error) {
+	var engine models.Engine
+	if err := s.db.QueryRowContext(ctx, `SELECT id, manufacturer, price, power FROM engine WHERE manufacturer = ?`, id).Scan(&engine.ID, &engine.Engine, &engine.Price, &engine.BaseLevel); err != nil {
+		return engine, err
+	}
+	return engine, nil
+}
+
 func (s *SqliteF1Repo) GetTokens(ctx context.Context, playerID int64) (int, error) {
 	var tokens int
 	if err := s.db.QueryRowContext(ctx, `SELECT tokens FROM players WHERE id = ?`, playerID).Scan(&tokens); err != nil {
@@ -611,7 +627,7 @@ func (s *SqliteF1Repo) Fire(ctx context.Context, userID, pilotID int64, who stri
 
 func (s *SqliteF1Repo) NewSeasonCar(ctx context.Context, newLevel int, teamID int64) error {
 
-	if _, err := s.db.ExecContext(ctx, `UPDATE players SET car_lvl = ? WHERE id = ?`, newLevel, teamID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE teams SET car_lvl = ? WHERE id = ?`, newLevel, teamID); err != nil {
 		return err
 	}
 	return nil
@@ -631,4 +647,29 @@ func (s *SqliteF1Repo) GetTeamPrincipal(ctx context.Context, principalID int64) 
 		return principal, err
 	}
 	return principal, nil
+}
+
+func (s *SqliteF1Repo) SetBudget(ctx context.Context, playerID int64, budget int) error {
+	if budget > 0 {
+		tx, err := s.Begin(ctx)
+		if err != nil { return err }
+		defer tx.Rollback()
+		if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = ? WHERE id = ?`, budget, playerID); err != nil {
+			return err
+		}
+		
+		if _, err := tx.ExecContext(ctx, `UPDATE players SET tokens = 120 WHERE id = ?`, playerID); err != nil {
+			return err
+		}
+		
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		
+		return nil
+	}
+	
+	return fmt.Errorf("budget must be positive")
+	
+	
 }
