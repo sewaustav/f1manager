@@ -48,7 +48,7 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 	}
 	
 	// 3. Бонус шефа
-	principalBonus := float64(principal.Level) / 10.0
+	principalBonus := float64(principal.Level) / 5.0
 	
 	// 4. Соответствие машины типу трассы
 	carFit := 0.0
@@ -60,6 +60,7 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 	case models.MediumDownForce:
 		carFit = float64(car.Chassis+car.Tyres) / 2.0
 	}
+	carFit *= 2.5
 	
 	// 5. Погода
 	weatherMod := 0.0
@@ -74,7 +75,9 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 		}
 	}
 	
-	totalPaceBonus := float64(team.CarLevel) + carFit + float64(pilotTrackLvl) + principalBonus + weatherMod - synergyPenalty - diffPenalty
+	carBonus := float64(team.CarLevel)*1.5
+	
+	totalPaceBonus := carBonus + carFit + float64(pilotTrackLvl) + principalBonus + weatherMod - synergyPenalty - diffPenalty
 	return totalPaceBonus, float64(pilotTrackLvl)
 }
 
@@ -126,8 +129,8 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		
 		// Расчет DNF (Сходов)
 		mechDNFChance := 0.0
-		if c.Reliability < 55 {
-			mechDNFChance = float64(55-c.Reliability) / 2.0
+		if c.Reliability < 35 {
+			mechDNFChance = float64(35-c.Reliability) / 2.0
 		}
 		pilotErrorChance := float64(p.MistakePossibility)
 		if track.Type == models.City {

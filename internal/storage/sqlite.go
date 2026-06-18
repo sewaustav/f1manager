@@ -649,27 +649,9 @@ func (s *SqliteF1Repo) GetTeamPrincipal(ctx context.Context, principalID int64) 
 	return principal, nil
 }
 
-func (s *SqliteF1Repo) SetBudget(ctx context.Context, playerID int64, budget int) error {
-	if budget > 0 {
-		tx, err := s.Begin(ctx)
-		if err != nil { return err }
-		defer tx.Rollback()
-		if _, err := tx.ExecContext(ctx, `UPDATE players SET budget = ? WHERE id = ?`, budget, playerID); err != nil {
-			return err
-		}
-		
-		if _, err := tx.ExecContext(ctx, `UPDATE players SET tokens = 120 WHERE id = ?`, playerID); err != nil {
-			return err
-		}
-		
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-		
-		return nil
+func (s *SqliteF1Repo) ResetTokens(ctx context.Context, playerID int64) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE players SET tokens = 120 WHERE id = ?`, playerID); err != nil {
+		return err
 	}
-	
-	return fmt.Errorf("budget must be positive")
-	
-	
+	return nil
 }

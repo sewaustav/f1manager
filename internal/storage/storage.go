@@ -41,7 +41,7 @@ type F1Repo interface {
 	NewSeasonCar(ctx context.Context, newLevel int, teamID int64) error
 	GetCar(ctx context.Context, teamID int64) (models.Car, error)
 	GetTeamPrincipal(ctx context.Context, principalID int64) (models.TeamPrincipal, error)
-	SetBudget(ctx context.Context, playerID int64, budget int) error
+	ResetTokens(ctx context.Context, playerID int64) error
 }
 
 type DBTX interface {

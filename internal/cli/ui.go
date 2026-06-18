@@ -642,8 +642,12 @@ func (c *CLI) resetTokensAndBudget(ctx context.Context) {
 		budget = budget + ice.Price
 		fmt.Println(pl.ID, "budget", budget)
 		fmt.Println(team.Budget-budget)
-		if err := c.store.SetBudget(ctx, pl.ID, team.Budget-budget); err != nil {
+		if err := c.store.UpdateBudget(ctx, pl.ID, -1*(team.Budget-budget)); err != nil {
 			fmt.Println("Ошибка при установке бюджета:", err)
+			return
+		}
+		if err := c.store.ResetTokens(ctx, pl.ID); err != nil {
+			fmt.Println("Ошибка при сбросе токенов:", err)
 			return
 		}
 	}
