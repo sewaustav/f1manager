@@ -117,7 +117,7 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		bonus, trackLvl := e.calcModifiers(p, t, c, track, tp, isRain)
 		
 		// Квалификация
-		qualiPace := float64(p.QualifyingRating) + bonus
+		qualiPace := float64(p.QualifyingRating)*1.5 + bonus
 		variance := e.getVariance(p)
 		qualiScore := qualiPace + variance
 		
