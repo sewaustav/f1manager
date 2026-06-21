@@ -190,6 +190,8 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		switch track.QualifyingImpact {
 		case models.HighImpact:
 			weight = 25.0
+		case models.DecentImpact:
+			weight = 15.0
 		case models.LowImpact:
 			weight = 5.0
 		}

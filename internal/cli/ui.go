@@ -896,15 +896,32 @@ func (c *CLI) buildCarForNextSeason(ctx context.Context) error {
 		fmt.Println("Сколько вы хотите вложить в болид?")
 		var amount int
 		fmt.Scanln(&amount)
+		if amount > p.Budget {
+			fmt.Println("not enough funds")
+			continue
+		}
 		bonus := c.diminishingReturn(float64(amount))
 		fmt.Println(newCarLvl+int(bonus))
 		fmt.Println("bonus", bonus)
 		fmt.Println("newCarLvl", newCarLvl)
 		fmt.Println("newCarLvl+int(bonus)", newCarLvl+int(bonus))
-		if err := c.store.NewSeasonCar(ctx, newCarLvl+int(bonus), team.ID); err != nil {
+		tx, err := c.store.Begin(ctx)
+		if err != nil {
+			fmt.Println("error starting transaction", err)
+			return err
+		}
+		defer tx.Rollback()
+		txRepo := c.store.WithTx(tx)
+		if err := txRepo.NewSeasonCar(ctx, newCarLvl+int(bonus), team.ID); err != nil {
 			fmt.Println("error building car", err)
 		}
-		
+		if err := txRepo.UpdateBudget(ctx, p.ID, amount); err != nil {
+			fmt.Println("error updating budget", err)
+		}
+		if err := tx.Commit(); err != nil {
+			fmt.Println("error committing transaction", err)
+			return err
+		}
 	}
 	return nil
 }
