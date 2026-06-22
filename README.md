@@ -20,8 +20,8 @@ A multiplayer terminal-based Formula 1 season simulator written in Go. Players d
 
 ```bash
 # 1. Clone the repository
-git clone <repo-url>
-cd f1
+git clone https://github.com/sewaustav/f1manager
+cd f1manager
 
 # 2. Download dependencies
 go mod download
