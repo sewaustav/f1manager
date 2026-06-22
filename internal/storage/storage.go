@@ -42,6 +42,8 @@ type F1Repo interface {
 	GetCar(ctx context.Context, teamID int64) (models.Car, error)
 	GetTeamPrincipal(ctx context.Context, principalID int64) (models.TeamPrincipal, error)
 	ResetTokens(ctx context.Context, playerID int64) error
+	ChangePilotTeam(ctx context.Context, pilotID, teamID int64) error
+	
 }
 
 type DBTX interface {

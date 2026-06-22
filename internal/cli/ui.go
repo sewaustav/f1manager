@@ -719,7 +719,8 @@ func (c *CLI) crossSeason(ctx context.Context) {
 		fmt.Println("2. Увольнение пилота: fire <your_id> pilot/principal <pilot_id/principal_id>")
 		fmt.Println("3. Поменять мотор: engine <your_id> <engine_id>")
 		fmt.Println("4. Поменять главу: change_principal <your_id> <principal_id> <amount>")
-		fmt.Println("5. Начать сезон: start")
+		fmt.Println("5. Совершить обмен change <your_id> <your_opponent_id> <your_pilot_id> <pilot_id> <amount>(0 если баш на баш)")
+		fmt.Println("6. Начать сезон: start")
 		
 		commandStr, _ := c.reader.ReadString('\n')
 		command := strings.Fields(commandStr)
@@ -795,6 +796,53 @@ func (c *CLI) crossSeason(ctx context.Context) {
 				ID:  player.Team,
 				ICE: models.ICEName(engineID),
 			}); err != nil {
+				fmt.Println(err)
+				continue
+			}
+			
+		} else if command[0] == "change" {
+			playerID, _ := strconv.ParseInt(command[1], 10, 64)
+			opponentID, _ := strconv.ParseInt(command[2], 10, 64)
+			yourPilotID, _ := strconv.ParseInt(command[3], 10, 64)
+			pilotID, _ := strconv.ParseInt(command[4], 10, 64)
+			amount, _ := strconv.Atoi(command[5])
+			
+			seller, err := c.store.GetPlayer(ctx, playerID)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			buyer, err := c.store.GetPlayer(ctx, opponentID)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			if amount > 0 {
+				if seller.Budget < amount {
+					fmt.Println("not enough funds")
+					continue
+				}
+			} else if amount < 0 {
+				if buyer.Budget < -amount {
+					fmt.Println("not enough funds")
+					continue
+				}
+			}
+			tx, err := c.store.Begin(ctx)
+			txRepo := c.store.WithTx(tx)
+			defer tx.Rollback()
+			
+			if err := txRepo.ChangePilotTeam(ctx, yourPilotID, opponentID); err != nil {
+				fmt.Println(err)
+				continue
+			}
+			
+			if err := txRepo.ChangePilotTeam(ctx, pilotID, playerID); err != nil {
+				fmt.Println(err)
+				continue
+			}
+			
+			if err := tx.Commit(); err != nil {
 				fmt.Println(err)
 				continue
 			}

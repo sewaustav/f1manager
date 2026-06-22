@@ -414,6 +414,14 @@ func (s *SqliteF1Repo) fillTeams(ctx context.Context, pilotID, teamID int64) err
 	return nil
 }
 
+func (s *SqliteF1Repo) ChangePilotTeam(ctx context.Context, pilotID, teamID int64) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE pilots SET team_id = ? WHERE id = ?`, teamID, pilotID); err != nil {
+		return err
+	}
+	
+	return nil
+}
+
 func (s *SqliteF1Repo) TeamPrincipalTransfer(ctx context.Context, teamPrincipalID, fromTeamID, teamID int64, cost int) error {
 	fmt.Println(cost, fromTeamID, teamID, teamPrincipalID)
 	if err := s.checkBudget(ctx, teamID, cost); err != nil {
