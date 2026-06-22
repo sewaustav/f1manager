@@ -92,7 +92,7 @@ func (e *Engine) getVariance(p models.Pilot) float64 {
 	}
 }
 
-func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots []models.Pilot, teams map[int64]models.Team, cars map[int64]models.Car, principals map[int64]models.TeamPrincipal) []models.RaceResult {
+func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots []models.Pilot, teams map[int64]models.Team, cars map[int64]models.Car, principals map[int64]models.TeamPrincipal, pilotsStanding, teamStanding map[int64]int) []models.RaceResult {
 	isRain := e.r.Intn(100) < track.RainPossibility
 	
 	type tempResult struct {

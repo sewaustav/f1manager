@@ -554,7 +554,7 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		fmt.Printf("ЭТАП: %s\n", track.Name)
 		fmt.Printf("----------------------------------------\n")
 		
-		results := c.engine.SimulateWeekend(ctx, track, pilots, teams, cars, principals)
+		results := c.engine.SimulateWeekend(ctx, track, pilots, teams, cars, principals, driverPoints, teamPoints)
 		
 		fmt.Printf("%-4s | %-20s | %-15s | %-5s | %-5s | %-6s\n", "Поз", "Пилот", "Команда", "Квала", "Гонка", "Очки")
 		for _, res := range results {
