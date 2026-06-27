@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"slices"
 	"strconv"
@@ -199,15 +200,15 @@ func (c *CLI) runDraft(ctx context.Context, players []models.Player) {
 		fmt.Println("У вас", tokens, "токенов")
 		fmt.Println("У вас", budget, "миллионов")
 		
-		var tokensToBy int
-		fmt.Print("Выберете количество токенов для покупки(1 миллион = 1 токен): ")
-		fmt.Scanln(&tokensToBy)
-		if tokensToBy != 0 {
-			c.buyTokens(ctx, models.Player{
-				ID: id,
-				Team: player.Team,
-			}, tokensToBy, 0)
-		}
+		//var tokensToBy int
+		//fmt.Print("Выберете количество токенов для покупки(1 миллион = 1 токен): ")
+		//fmt.Scanln(&tokensToBy)
+		//if tokensToBy != 0 {
+		//	c.buyTokens(ctx, models.Player{
+		//		ID: id,
+		//		Team: player.Team,
+		//	}, tokensToBy, 0)
+		//}
 		
 	}
 }
@@ -383,15 +384,26 @@ func (c *CLI) fillBotTeams(ctx context.Context) {
 			}
 		}
 		
-		for count < 2 {
-			fmt.Printf("У команды %s не хватает пилота (всего %d/2). Введите ID свободного пилота для заполнения: ", t.Name, count)
-			pIDStr, _ := c.reader.ReadString('\n')
-			pID, _ := strconv.ParseInt(strings.TrimSpace(pIDStr), 10, 64)
-			if err := c.store.ExecuteTransfer(ctx, pID, 0, t.ID, 0); err != nil {
-				fmt.Println("Ошибка при выполнении трансфера:", err)
-				continue
+		for count != 2 {
+			if count < 2 {
+				fmt.Printf("У команды %s не хватает пилота (всего %d/2). Введите ID свободного пилота для заполнения: ", t.Name, count)
+				pIDStr, _ := c.reader.ReadString('\n')
+				pID, _ := strconv.ParseInt(strings.TrimSpace(pIDStr), 10, 64)
+				if err := c.store.ExecuteTransfer(ctx, pID, 0, t.ID, 0); err != nil {
+					fmt.Println("Ошибка при выполнении трансфера:", err)
+					continue
+				}
+				count++
+			} else {
+				fmt.Printf("У команды %s слишком много пилотов (всего %d/2). Введите ID пилота для удаления: ", t.Name, count)
+				pIDStr, _ := c.reader.ReadString('\n')
+				pID, _ := strconv.ParseInt(strings.TrimSpace(pIDStr), 10, 64)
+				if err := c.store.ExecuteTransfer(ctx, pID, t.ID, 0, 0); err != nil {
+					fmt.Println("Ошибка при выполнении трансфера:", err)
+					continue
+				}
+				count--
 			}
-			count++
 		}
 	}
 }
@@ -461,98 +473,96 @@ func (c *CLI) configureSeason(ctx context.Context) {
 }
 
 func (c *CLI) runSimulation(ctx context.Context) {
-	
 	fmt.Println("\n=== СТАРТ СИМУЛЯЦИИ СЕЗОНА ===")
 	tracks, err := c.store.GetTracks(ctx)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	pilots, err := c.store.GetActivePilots(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	teamsList, err := c.store.GetTeams(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
 	
-	players, err := c.store.GetPlayers(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	
-	var playersTeams []int64
-	
-	for _, p := range players {
-		playersTeams = append(playersTeams, p.Team)
-	}
-	
-	
-	if len(pilots) < 20 {
-		fmt.Println("Недостаточно пилотов для начала сезона!")
-		for _, p := range pilots {
-			fmt.Println(p)
-		}
-		return
-	}
-	
-	teams := make(map[int64]models.Team)
-	cars := make(map[int64]models.Car)
-	principals := make(map[int64]models.TeamPrincipal)
-	
-	for _, t := range teamsList {
-		teams[t.ID] = t
-		if slices.Contains( playersTeams, t.ID) {
-			car, err := c.store.GetCar(ctx, t.ID)
-			if err != nil {
-				fmt.Println("error getting car",err)
-				return
-			}
-			cars[t.ID] = car
-			var principalID int64
-			for _, p := range players {
-				if p.Team == t.ID {
-					principalID = *p.TeamPrincipal
-				}
-			}
-			fmt.Println("principalID", principalID)
-			principal, err := c.store.GetTeamPrincipal(ctx, principalID)
-			if err != nil {
-				fmt.Println("principal", err)
-				return
-			}
-			principals[t.ID] = principal
-		} else {
-			fmt.Println(t)
-			
-			cars[t.ID] = models.Car{TeamID: t.ID, AeroDynamic: 20, Engine: 20, Chassis: 20, Floor: 20, Tyres: 20, Reliability: 20}
-			principals[t.ID] = models.TeamPrincipal{Level: 20}
-		}
-	}
-	
-	snapshots := make([]engine.PilotSeasonSnapshot, len(pilots))
-	for i, p := range pilots {
-		snapshots[i] = engine.PilotSeasonSnapshot{
-			PilotID:         p.ID,
-			BaseRating:      p.Rating,
-			BaseQualiRating: p.QualifyingRating,
-		}
-	}
-	
-	driverPoints := make(map[int64]int)   // pilotID -> очки
-	teamPoints   := make(map[int64]int)   // garageID -> очки
+	driverPoints := make(map[int64]int)  // pilotID -> очки
+	teamPoints   := make(map[int64]int)  // garageID -> очки
 	
 	driverStandings := make(map[string]int)
 	teamStandings   := make(map[string]int)
+	
+	var snapshots []engine.PilotSeasonSnapshot
+	var lastPilots []models.Pilot 
 	
 	for _, track := range tracks {
 		fmt.Printf("\n----------------------------------------\n")
 		fmt.Printf("ЭТАП: %s\n", track.Name)
 		fmt.Printf("----------------------------------------\n")
+		
+		pilots, err := c.store.GetActivePilots(ctx)
+		if err != nil {
+			fmt.Println("ошибка получения пилотов:", err)
+			return
+		}
+		if len(pilots) < 20 {
+			fmt.Println("Недостаточно пилотов для этапа!")
+			return
+		}
+		lastPilots = pilots 
+		
+		snapshots = make([]engine.PilotSeasonSnapshot, len(pilots))
+		for i, p := range pilots {
+			snapshots[i] = engine.PilotSeasonSnapshot{
+				PilotID:         p.ID,
+				BaseRating:      p.Rating,
+				BaseQualiRating: p.QualifyingRating,
+			}
+		}
+		
+		teamsList, err := c.store.GetTeams(ctx)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		
+		players, err := c.store.GetPlayers(ctx)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		
+		var playersTeams []int64
+		for _, p := range players {
+			playersTeams = append(playersTeams, p.Team)
+		}
+		
+		teams := make(map[int64]models.Team)
+		cars := make(map[int64]models.Car)
+		principals := make(map[int64]models.TeamPrincipal)
+		
+		for _, t := range teamsList {
+			teams[t.ID] = t
+			if slices.Contains(playersTeams, t.ID) {
+				car, err := c.store.GetCar(ctx, t.ID)
+				if err != nil {
+					fmt.Println("error getting car", err)
+					return
+				}
+				cars[t.ID] = car
+				
+				var principalID int64
+				for _, p := range players {
+					if p.Team == t.ID {
+						principalID = *p.TeamPrincipal
+					}
+				}
+				
+				principal, err := c.store.GetTeamPrincipal(ctx, principalID)
+				if err != nil {
+					fmt.Println("principal", err)
+					return
+				}
+				principals[t.ID] = principal
+			} else {
+				cars[t.ID] = models.Car{TeamID: t.ID, AeroDynamic: 20, Engine: 20, Chassis: 20, Floor: 20, Tyres: 20, Reliability: 20}
+				principals[t.ID] = models.TeamPrincipal{Level: 20}
+			}
+		}
 		
 		results := c.engine.SimulateWeekend(ctx, track, pilots, teams, cars, principals, driverPoints, teamPoints)
 		
@@ -574,6 +584,7 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		}
 	}
 	
+	// Вывод результатов сезона
 	fmt.Println("\n========================================")
 	fmt.Println("ИТОГОВЫЙ ЗАЧЕТ ПИЛОТОВ (WDC):")
 	fmt.Println("========================================")
@@ -588,16 +599,16 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		fmt.Printf("%-25s : %d очков\n", name, pts)
 	}
 	
+	// Передаем результаты, используя финальное состояние пилотов и snapshot'ов
 	c.engine.UpdateAfterSeason(ctx, engine.SeasonStandings{
 		DriverPoints: driverPoints,
 		TeamPoints:   teamPoints,
-		Pilots:       pilots,
+		Pilots:       lastPilots,
 		Snapshots:    snapshots,
 	})
 	
 	c.resetTokensAndBudget(ctx)
 	c.crossSeason(ctx)
-	
 }
 
 func (c *CLI) resetTokensAndBudget(ctx context.Context) {
@@ -729,17 +740,7 @@ func (c *CLI) crossSeason(ctx context.Context) {
 			if err != nil {
 				return 
 			}
-			for _, p := range players {
-				var tokensToBy int
-				fmt.Print("Выберете количество токенов для покупки(1 миллион = 1 токен): ")
-				fmt.Scanln(&tokensToBy)
-				if tokensToBy != 0 {
-					c.buyTokens(ctx, models.Player{
-						ID: p.ID,
-						Team: p.Team,
-					}, tokensToBy, 0)
-				}
-			}
+			
 			c.fillBotTeams(ctx)
 			c.configureSeason(ctx)
 			c.runSimulation(ctx)
@@ -925,6 +926,39 @@ func (c *CLI) diminishingReturn(x float64) float64 {
 	return coefficient * math.Sqrt(x)
 }
 
+func calcBonus(input int) int {
+	weights := map[int][]int{
+		0:  {45, 25, 15, 8, 4, 2, 1, 0, 0, 0, 0},
+		1:  {20, 35, 20, 12, 6, 4, 2, 1, 0, 0, 0},
+		2:  {10, 20, 35, 18, 9, 5, 2, 1, 0, 0, 0},
+		3:  {5, 12, 18, 35, 15, 8, 4, 2, 1, 0, 0},
+		4:  {2, 6, 10, 17, 35, 16, 8, 4, 1, 1, 0},
+		5:  {1, 3, 6, 10, 15, 35, 16, 8, 4, 1, 1},
+		6:  {0, 1, 3, 6, 10, 15, 35, 16, 8, 4, 2},
+		7:  {0, 0, 1, 3, 6, 10, 15, 35, 16, 10, 4},
+		8:  {0, 0, 0, 1, 3, 6, 10, 15, 35, 20, 10},
+		9:  {0, 0, 0, 0, 1, 3, 6, 10, 15, 45, 20},
+		10: {0, 0, 0, 0, 0, 5, 10, 15, 20, 45, 5},
+	}
+	
+	currentWeights, exists := weights[input]
+	if !exists {
+		return input
+	}
+	
+	roll := rand.Intn(100)
+	accumulator := 0
+	
+	for choice, weight := range currentWeights {
+		accumulator += weight
+		if roll < accumulator {
+			return choice
+		}
+	}
+	
+	return input
+}
+
 func (c *CLI) buildCarForNextSeason(ctx context.Context) error {
 	players, err := c.store.GetPlayers(ctx)
 	if err != nil {
@@ -934,25 +968,57 @@ func (c *CLI) buildCarForNextSeason(ctx context.Context) error {
 	
 	for _, p := range players {
 		fmt.Println(p)
+		
 		team, err := c.store.GetTeam(ctx, p.Team)
 		if err != nil {
 			fmt.Println("error getting team", err)
 			return err
 		}
 		
-		newCarLvl := (team.BaseLevel + team.TubeLevel + team.Engineer + team.SimLevel + team.CarLevel) / 5 
-		fmt.Println("Сколько вы хотите вложить в болид?")
-		var amount int
-		fmt.Scanln(&amount)
-		if amount > p.Budget {
+		fmt.Println(p.Name,", сколько вы хотите вложить в болид?")
+		
+		fmt.Print("Улучшение базы(макс 10млн) :")
+		var base int
+		fmt.Scanln(&base)
+		if base > 10 {
 			fmt.Println("not enough funds")
 			continue
 		}
-		bonus := c.diminishingReturn(float64(amount))
-		fmt.Println(newCarLvl+int(bonus))
-		fmt.Println("bonus", bonus)
-		fmt.Println("newCarLvl", newCarLvl)
-		fmt.Println("newCarLvl+int(bonus)", newCarLvl+int(bonus))
+		fmt.Print("Улучшение трубы(макс 5млн) :")
+		var tube int
+		fmt.Scanln(&tube)
+		if tube > 5 {
+			fmt.Println("not enough funds")
+			continue
+		}
+		
+		var engineer int
+		if team.Engineer < 95 {
+			fmt.Print("Нанять инженеров(макс 5 млн) :")
+			
+			fmt.Scanln(&engineer)
+			if engineer > 5 {
+				fmt.Println("not enough funds")
+				continue
+			}
+		} else {
+			engineer = 0
+		}
+		
+		fmt.Print("Улучшение симулятора(макс 5млн) :")
+		var sim int
+		fmt.Scanln(&sim)
+		if sim > 5 {
+			fmt.Println("not enough funds")
+			continue
+		}
+		
+		team, err = c.store.GetTeam(ctx, p.Team)
+		if err != nil {
+			fmt.Println("error getting team", err)
+			return err
+		}
+		
 		tx, err := c.store.Begin(ctx)
 		if err != nil {
 			fmt.Println("error starting transaction", err)
@@ -960,12 +1026,35 @@ func (c *CLI) buildCarForNextSeason(ctx context.Context) error {
 		}
 		defer tx.Rollback()
 		txRepo := c.store.WithTx(tx)
-		if err := txRepo.NewSeasonCar(ctx, newCarLvl+int(bonus), team.ID); err != nil {
-			fmt.Println("error building car", err)
+		
+		newCarLvl := (team.BaseLevel + team.TubeLevel + team.Engineer + team.SimLevel + team.CarLevel) / 5
+		
+		if err = txRepo.UpgradeTeam(ctx, models.Team{
+			ID:           team.ID,
+			BaseLevel:    team.BaseLevel + calcBonus(base),
+			TubeLevel:    team.TubeLevel + calcBonus(tube),
+			Engineer:     team.Engineer + calcBonus(engineer),
+			SimLevel:     team.SimLevel + calcBonus(sim),
+			CarLevel:     newCarLvl,
+		}); err != nil {
+			fmt.Println("error upgrading team", err)
+			return err
 		}
-		if err := txRepo.UpdateBudget(ctx, p.ID, amount); err != nil {
+		
+		
+		if err := txRepo.UpdateBudget(ctx, p.ID, base); err != nil {
 			fmt.Println("error updating budget", err)
 		}
+		if err := txRepo.UpdateBudget(ctx, p.ID, tube); err != nil {
+			fmt.Println("error updating budget", err)
+		}
+		if err := txRepo.UpdateBudget(ctx, p.ID, engineer); err != nil {
+			fmt.Println("error updating budget", err)
+		}
+		if err := txRepo.UpdateBudget(ctx, p.ID, sim); err != nil {
+			fmt.Println("error updating budget", err)
+		}
+		
 		if err := tx.Commit(); err != nil {
 			fmt.Println("error committing transaction", err)
 			return err

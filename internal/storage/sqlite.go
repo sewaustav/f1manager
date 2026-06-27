@@ -541,6 +541,13 @@ func (s *SqliteF1Repo) UpdateTeam(ctx context.Context, team models.Team) error {
 	return nil
 }
 
+func (s *SqliteF1Repo) UpgradeTeam(ctx context.Context, team models.Team) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE teams SET base_level = ?, tube_level = ?, engineer = ?, sim_level = ?, car_level = ? WHERE id = ?`, team.BaseLevel, team.TubeLevel, team.Engineer, team.SimLevel, team.CarLevel, team.ID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *SqliteF1Repo) GetEngines(ctx context.Context) ([]models.Engine, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, manufacturer, price, power

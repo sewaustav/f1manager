@@ -43,7 +43,7 @@ type F1Repo interface {
 	GetTeamPrincipal(ctx context.Context, principalID int64) (models.TeamPrincipal, error)
 	ResetTokens(ctx context.Context, playerID int64) error
 	ChangePilotTeam(ctx context.Context, pilotID, teamID int64) error
-	
+	UpgradeTeam(ctx context.Context, team models.Team) error
 }
 
 type DBTX interface {
