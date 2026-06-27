@@ -130,7 +130,10 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		// Расчет DNF (Сходов)
 		mechDNFChance := 0.0
 		if c.Reliability < 35 {
-			mechDNFChance = float64(35-c.Reliability) / 2.0
+			if c.Reliability > 35 {
+				c.Reliability = 35
+			}
+			mechDNFChance = float64(36-c.Reliability) / 2.0
 		}
 		pilotErrorChance := float64(p.MistakePossibility)
 		if track.Type == models.City {

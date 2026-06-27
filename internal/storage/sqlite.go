@@ -98,8 +98,8 @@ func (s *SqliteF1Repo) GetPlayer(ctx context.Context, id int64) (models.PlayerPr
 
 func (s *SqliteF1Repo) GetTeam(ctx context.Context, teamID int64) (models.Team, error) {
 	var t models.Team
-	row := s.db.QueryRowContext(ctx, `SELECT id, name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget FROM teams WHERE id = ?`, teamID)
-	if err := row.Scan(&t.ID, &t.Name, &t.CarLevel, &t.ICE, &t.BaseLevel, &t.Engineer, &t.TubeLevel, &t.SimLevel, &t.UpdateRating, &t.IsManufacturer, &t.Budget); err != nil {
+	row := s.db.QueryRowContext(ctx, `SELECT id, name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget, car_settings FROM teams WHERE id = ?`, teamID)
+	if err := row.Scan(&t.ID, &t.Name, &t.CarLevel, &t.ICE, &t.BaseLevel, &t.Engineer, &t.TubeLevel, &t.SimLevel, &t.UpdateRating, &t.IsManufacturer, &t.Budget, &t.CarSettings); err != nil {
 		return models.Team{}, err
 	}
 	return t, nil
@@ -124,7 +124,7 @@ func (s *SqliteF1Repo) GetBudget(ctx context.Context, teamID int64) (int, error)
 
 func (s *SqliteF1Repo) GetTeams(ctx context.Context) ([]models.Team, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget
+		SELECT id, name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget, car_settings
 		FROM teams`)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func (s *SqliteF1Repo) GetTeams(ctx context.Context) ([]models.Team, error) {
 		var t models.Team
 		var ice, isManufacturer int
 		
-		if err := rows.Scan(&t.ID, &t.Name, &t.CarLevel, &ice, &t.BaseLevel, &t.Engineer, &t.TubeLevel, &t.SimLevel, &t.UpdateRating, &isManufacturer, &t.Budget); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.CarLevel, &ice, &t.BaseLevel, &t.Engineer, &t.TubeLevel, &t.SimLevel, &t.UpdateRating, &isManufacturer, &t.Budget, &t.CarSettings); err != nil {
 			return nil, err
 		}
 		
@@ -542,7 +542,7 @@ func (s *SqliteF1Repo) UpdateTeam(ctx context.Context, team models.Team) error {
 }
 
 func (s *SqliteF1Repo) UpgradeTeam(ctx context.Context, team models.Team) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE teams SET base_level = ?, tube_level = ?, engineer = ?, sim_level = ?, car_level = ? WHERE id = ?`, team.BaseLevel, team.TubeLevel, team.Engineer, team.SimLevel, team.CarLevel, team.ID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE teams SET base_lvl = ?, tube = ?, engineer = ?, sim = ?, car_lvl = ?, car_settings = ? WHERE id = ?`, team.BaseLevel, team.TubeLevel, team.Engineer, team.SimLevel, team.CarLevel, team.CarSettings, team.ID); err != nil {
 		return err
 	}
 	return nil

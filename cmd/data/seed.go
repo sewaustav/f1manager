@@ -182,7 +182,8 @@ func (s *Seed) createTables() {
 	    tyre_management INTEGER,
 	    mistake_possibility INTEGER,
 	    price INTEGER,
-	    sponsors INTEGER
+	    sponsors INTEGER, 
+	    car_fit INTEGER
 	)`
 	
 	if _, err := s.DB.Exec(pilotTable); err != nil {
@@ -273,7 +274,8 @@ func (s *Seed) createTables() {
 	    sim INTEGER,
 	    update_rtg INTEGER,
 	    is_manufacturer INTEGER,
-		budget INTEGER
+		budget INTEGER,
+		car_settings INTEGER
 	)
 	`
 	
@@ -294,6 +296,7 @@ func (s *Seed) createTables() {
 	    update_rtg INTEGER,
 	    is_manufacturer INTEGER,
 		budget INTEGER,
+		car_settings INTEGER,
 		FOREIGN KEY(ice) REFERENCES engine(manufacturer)
 	)
 	`
@@ -342,6 +345,7 @@ func (s *Seed) createTables() {
 	    mistake_possibility INTEGER,
 	    price INTEGER,
 	    sponsors INTEGER,
+	    car_fit INTEGER,
 	    FOREIGN KEY(team_id) REFERENCES players(id),
 	    FOREIGN KEY(garage_id) REFERENCES teams(id)
 	)`
@@ -400,26 +404,26 @@ func (s *Seed) seedTeams(base []models.Team) error {
 	defer tx.Rollback()
 	
 	stmtBase, err := tx.Prepare(`
-		INSERT INTO base_team (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO base_team (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget, car_settings)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmtBase.Close()
 	
 	stmtTeam, err := tx.Prepare(`
-		INSERT INTO teams (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO teams (name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget, car_settings)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmtTeam.Close()
 	
 	for _, t := range base {
-		if _, err := stmtBase.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer), t.Budget); err != nil {
+		if _, err := stmtBase.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer), t.Budget, t.CarSettings); err != nil {
 			return err
 		}
-		if _, err := stmtTeam.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer), t.Budget); err != nil {
+		if _, err := stmtTeam.Exec(t.Name, t.CarLevel, int(t.ICE), t.BaseLevel, t.Engineer, t.TubeLevel, t.SimLevel, t.UpdateRating, int(t.IsManufacturer), t.Budget, t.CarSettings); err != nil {
 			return err
 		}
 	}
@@ -481,8 +485,8 @@ func (s *Seed) seedPilots(pilots []models.Pilot) error {
 	defer tx.Rollback()
 	
 	stmt, err := tx.Prepare(`
-		INSERT INTO pilots_initial (name, rating, garage_id, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO pilots_initial (name, rating, garage_id, quali_rating, style, expirince, adaptiveness, emotions, stability, rain, settings_angle, starting, tyre_management, mistake_possibility, price, sponsors, car_fit)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -493,6 +497,7 @@ func (s *Seed) seedPilots(pilots []models.Pilot) error {
 			pl.Name, pl.Rating, pl.Garage, pl.QualifyingRating, int(pl.DrivingStyle), pl.Experience,
 			pl.Adaptiveness, int(pl.Emotions), int(pl.Stability), int(pl.Rain), int(pl.SettingsAngle),
 			pl.Starting, pl.TyreManagement, pl.MistakePossibility, pl.Price, pl.Sponsors,
+			pl.CarFit,
 		}
 		if _, err := stmt.Exec(vals...); err != nil {
 			return err
@@ -557,6 +562,7 @@ func (s *Seed) parseBaseData() []models.Team {
 		isManufacture, _ := strconv.Atoi(row[7])
 		ice, _ := strconv.Atoi(row[8])
 		budget, _ := strconv.Atoi(row[9])
+		carSettings, _ := strconv.Atoi(row[10])
 		
 		baseData = append(baseData, models.Team{
 			Name:           row[0],
@@ -569,7 +575,8 @@ func (s *Seed) parseBaseData() []models.Team {
 			IsManufacturer: models.IsManufacturer(isManufacture),
 			ICE:            models.ICEName(ice),
 			Budget:         budget,
-			Tokens:         100,
+			Tokens:         120,
+			CarSettings:    carSettings,
 		})
 		
 	}
@@ -752,6 +759,7 @@ func (s *Seed) parsePilotData() []models.Pilot {
 		mistakes, _ := strconv.Atoi(row[12])
 		price, _ := strconv.Atoi(row[13])
 		sponsors, _ := strconv.Atoi(row[14])
+		carFit, _ := strconv.Atoi(row[16])
 		
 		garageID := Ptr(int64(garage))
 		
@@ -772,6 +780,7 @@ func (s *Seed) parsePilotData() []models.Pilot {
 			MistakePossibility: mistakes,
 			Price: price,
 			Sponsors: sponsors,
+			CarFit: carFit,
 		})
 	}
 	

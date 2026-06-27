@@ -16,6 +16,13 @@ import (
 	"f1/internal/storage"
 )
 
+type Updates struct {
+	Team models.Team
+	Bonus int
+	Stage int64
+	Synergy int
+}
+
 type CLI struct {
 	store  storage.F1Repo
 	engine *engine.Engine
@@ -472,6 +479,133 @@ func (c *CLI) configureSeason(ctx context.Context) {
 	}
 }
 
+func (c *CLI) сalculateUpdate(team models.Team, investment int, stage int64) *Updates {
+	components := []int{team.BaseLevel, team.Engineer, team.SimLevel, team.TubeLevel}
+	
+	sum := 0
+	minComp := components[0]
+	maxComp := components[0]
+	
+	for _, val := range components {
+		sum += val
+		if val < minComp {
+			minComp = val
+		}
+		if val > maxComp {
+			maxComp = val
+		}
+	}
+	
+	avgBase := float64(sum) / float64(len(components))
+	delta := float64(maxComp - minComp)
+	
+	minBonus := -5.0
+	maxBonus := 3.0
+	
+	investmentModifier := ((float64(investment) / 15.0) * 3.0) - 1.5
+	baseModifier := ((avgBase / 100.0) * 2.0) - 1.0
+	deltaPenalty := (delta / 100.0) * 4.5
+	
+	if team.CarLevel > 95 {
+		penaltyRatio := float64(team.CarLevel-95) / 5.0
+		if penaltyRatio > 1.0 {
+			penaltyRatio = 1.0
+		}
+		maxBonus = 3.0 - (penaltyRatio * 3.0)
+	}
+	
+	randomValue := rand.Float64()
+	rawBonus := minBonus + randomValue*(maxBonus-minBonus)
+	
+	finalRawBonus := rawBonus + investmentModifier + baseModifier - deltaPenalty
+	
+	if finalRawBonus > maxBonus {
+		finalRawBonus = maxBonus
+	}
+	if finalRawBonus < minBonus {
+		finalRawBonus = minBonus
+	}
+	
+	roundedBonus := int(math.Round(finalRawBonus))
+	
+	return &Updates{
+		Team:    team,
+		Bonus:   roundedBonus + team.UpdateRating,
+		Stage:   stage,
+		Synergy: 0,
+	}
+}
+
+func (c *CLI) updateCar(ctx context.Context, team models.Team, budget int, stage, playerID int64) *Updates {
+	fmt.Print("Хотите обновить болид? (y/n): ")
+	var ok string 
+	fmt.Scanln(&ok) 
+	if ok == "y" {
+		fmt.Print("Что вы хотите обновить 1. Улучшить характеристики болида, 2. Адаптировать болид под стиль пилота : ")
+		var choice string 
+		fmt.Scanln(&choice) 
+		if choice == "1" {
+			fmt.Print("Введите сумму, которую хотите потратить(максимум 15 млн): ")
+			var amount int 
+			fmt.Scanln(&amount) 
+			if amount > 15 {
+				fmt.Println("Сумма не может быть больше 15 млн")
+				return nil
+			}
+			if budget < amount {
+				fmt.Println("Недостаточно средств")
+				return nil
+			}
+			
+			if err := c.store.UpdateBudget(ctx, playerID, amount); err != nil {
+				fmt.Println("Ошибка при обновлении бюджета")
+				return nil
+			}
+			
+			return c.сalculateUpdate(team, amount, stage)
+			
+			
+		} else if choice == "2" {
+			fmt.Println("Выберите, сколько вы хотите потратить на адаптацию (2 пункта = 1 млн)")
+			var amount int 
+			fmt.Scanln(&amount)
+			if amount == 0 {
+				return nil
+			}
+			synergy := amount * 2
+			if amount < 0 {
+				amount = amount * -1
+			}
+			if budget < amount {
+				fmt.Println("Недостаточно средств")
+				return nil
+			}
+			
+			if err := c.store.UpdateBudget(ctx, playerID, amount); err != nil {
+				fmt.Println("Ошибка при обновлении бюджета")
+				return nil
+			}
+			
+			return &Updates{
+				Team: team,
+				Synergy: synergy,
+				Bonus: 0,
+				Stage: stage,
+			}
+		} else {
+			fmt.Println("Несуществующий выбор")
+			return nil
+		}
+		
+		
+	}
+	return nil
+}
+
+func (c *CLI) bringUpdates(ctx context.Context) {
+	
+}
+
 func (c *CLI) runSimulation(ctx context.Context) {
 	fmt.Println("\n=== СТАРТ СИМУЛЯЦИИ СЕЗОНА ===")
 	tracks, err := c.store.GetTracks(ctx)
@@ -485,6 +619,8 @@ func (c *CLI) runSimulation(ctx context.Context) {
 	
 	driverStandings := make(map[string]int)
 	teamStandings   := make(map[string]int)
+	
+	var updates []*Updates
 	
 	var snapshots []engine.PilotSeasonSnapshot
 	var lastPilots []models.Pilot 
@@ -546,18 +682,62 @@ func (c *CLI) runSimulation(ctx context.Context) {
 				cars[t.ID] = car
 				
 				var principalID int64
+				var playerID int64
 				for _, p := range players {
 					if p.Team == t.ID {
 						principalID = *p.TeamPrincipal
+						playerID = p.ID
 					}
 				}
 				
 				principal, err := c.store.GetTeamPrincipal(ctx, principalID)
 				if err != nil {
 					fmt.Println("principal", err)
-					return
+					continue
 				}
 				principals[t.ID] = principal
+				
+				if track.ID == 3 || track.ID == 8 || track.ID == 13 {
+					budget, err := c.store.GetBudget(ctx, playerID)
+					if err != nil {
+						fmt.Println("budget", err)
+						continue
+					}
+					fmt.Println("budget", budget)
+					var stage int
+					switch track.ID {
+					case 3: stage = 7
+					case 8: stage = 12
+					case 13: stage = 18
+					}
+					update := c.updateCar(ctx, t, budget, int64(stage), playerID)
+					if update != nil {
+						updates = append(updates, update)
+						fmt.Println("update", update)
+					}
+				}
+				
+				if track.ID == 7 || track.ID == 12 || track.ID == 18 {
+					for _, update := range updates {
+						if update.Stage == track.ID {
+							fmt.Println("make update", update)
+							fmt.Println("syn", update.Team.CarSettings+update.Synergy)
+							updatedTeam := models.Team{
+								ID:           update.Team.ID,
+								BaseLevel:    update.Team.BaseLevel,
+								TubeLevel:    update.Team.TubeLevel,
+								Engineer:     update.Team.Engineer,
+								SimLevel:     update.Team.SimLevel,
+								CarLevel:     update.Team.CarLevel+update.Bonus,
+								CarSettings:  update.Team.CarSettings+update.Synergy,
+							}
+							if err := c.store.UpgradeTeam(ctx, updatedTeam); err != nil {
+								fmt.Println("Ошибка обновления", err)
+								continue
+							}
+						}
+					}
+				}
 			} else {
 				cars[t.ID] = models.Car{TeamID: t.ID, AeroDynamic: 20, Engine: 20, Chassis: 20, Floor: 20, Tyres: 20, Reliability: 20}
 				principals[t.ID] = models.TeamPrincipal{Level: 20}
@@ -1036,6 +1216,7 @@ func (c *CLI) buildCarForNextSeason(ctx context.Context) error {
 			Engineer:     team.Engineer + calcBonus(engineer),
 			SimLevel:     team.SimLevel + calcBonus(sim),
 			CarLevel:     newCarLvl,
+			CarSettings:  team.CarSettings,
 		}); err != nil {
 			fmt.Println("error upgrading team", err)
 			return err

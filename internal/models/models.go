@@ -58,6 +58,7 @@ type Pilot struct {
 	MistakePossibility int // 1-20%
 	Price              int // millions
 	Sponsors           int // millions
+	CarFit             int
 }
 
 type DownForce int
@@ -137,6 +138,7 @@ type Team struct {
 	Tokens         int
 	Budget         int // millions
 	IsManufacturer IsManufacturer
+	CarSettings    int
 }
 
 type Car struct {
@@ -146,7 +148,7 @@ type Car struct {
 	Chassis     int
 	Floor       int
 	Tyres       int
-	Reliability int // 55 tokens = 0% DNF chance
+	Reliability int // 35 tokens = 0% DNF chance
 	SettingsAngle  SettingsAngle
 }
 
