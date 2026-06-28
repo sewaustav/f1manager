@@ -307,12 +307,12 @@ func (s *SqliteF1Repo) CreatePilots(ctx context.Context) error {
 		INSERT INTO pilots (
 			id, name, garage_id, rating, quali_rating, style, expirince, 
 			adaptiveness, emotions, stability, rain, settings_angle, 
-			starting, tyre_management, mistake_possibility, price, sponsors
+			starting, tyre_management, mistake_possibility, price, sponsors, car_fit
 		) 
 		SELECT 
 			id, name, garage_id, rating, quali_rating, style, expirince, 
 			adaptiveness, emotions, stability, rain, settings_angle, 
-			starting, tyre_management, mistake_possibility, price, sponsors 
+			starting, tyre_management, mistake_possibility, price, sponsors, car_fit
 		FROM pilots_initial`
 	
 	if _, err := s.db.ExecContext(ctx, queryPilots); err != nil {
@@ -585,7 +585,7 @@ func (s *SqliteF1Repo) GetTokens(ctx context.Context, playerID int64) (int, erro
 }
 
 func (s *SqliteF1Repo) UpdateTokens(ctx context.Context, playerID int64, tokens int) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE players SET tokens = tokens + ? WHERE id = ?`, tokens, playerID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE players SET tokens = ? WHERE id = ?`, tokens, playerID); err != nil {
 		return err
 	}
 	return nil

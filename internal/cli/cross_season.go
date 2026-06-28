@@ -6,11 +6,41 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"strconv"
 	"strings"
 )
 
-func (c *CLI) resetTokensAndBudget(ctx context.Context) {
+func (c *CLI) rankMap(input map[int64]int) map[int64]int {
+	type entry struct {
+		key   int64
+		value int
+	}
+
+	entries := make([]entry, 0, len(input))
+	for k, v := range input {
+		entries = append(entries, entry{k, v})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].value > entries[j].value
+	})
+
+	result := make(map[int64]int)
+	rank := 1
+	for i, e := range entries {
+		if i > 0 && entries[i].value < entries[i-1].value {
+			rank++
+		}
+		result[e.key] = rank
+	}
+
+	return result
+}
+
+func (c *CLI) resetTokensAndBudget(ctx context.Context, standing map[int64]int) {
+	rank := c.rankMap(standing)
+	
 	pilots, err := c.store.GetPilots(ctx)
 	if err != nil {
 		fmt.Println("Ошибка при получении списка пилотов:", err)
@@ -56,7 +86,9 @@ func (c *CLI) resetTokensAndBudget(ctx context.Context) {
 			fmt.Println("Ошибка при установке бюджета:", err)
 			return
 		}
-		if err := c.store.ResetTokens(ctx, pl.ID); err != nil {
+		tokens := 120 + 10 * (rank[pl.Team]-1)
+		
+		if err := c.store.UpdateTokens(ctx, pl.ID, tokens); err != nil {
 			fmt.Println("Ошибка при сбросе токенов:", err)
 			return
 		}

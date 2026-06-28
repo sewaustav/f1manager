@@ -110,7 +110,7 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 	carFitPenalty := 0.0    
 	delta := abs(team.CarSettings - pilot.CarFit)
 	if delta > 3 {
-		carFitPenalty = float64(delta - 3) * 0.3
+		carFitPenalty = float64(delta) * 0.5
 	}
 	
 	ctx := context.Background()

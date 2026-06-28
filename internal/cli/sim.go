@@ -322,6 +322,6 @@ func (c *CLI) runSimulation(ctx context.Context) {
 		Snapshots:    snapshots,
 	})
 	
-	c.resetTokensAndBudget(ctx)
+	c.resetTokensAndBudget(ctx, teamPoints)
 	c.crossSeason(ctx)
 }
