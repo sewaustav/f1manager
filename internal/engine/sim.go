@@ -25,6 +25,36 @@ func NewEngine(db *sql.DB) *Engine {
 	}
 }
 
+func (e *Engine) calcSetupBonus(pilot models.Pilot, team models.Team, car models.Car) float64 {
+	// Ширина рабочего окна: среднее шасси и CarLevel, оба с равным весом.
+	// Чем шире окно — тем выше потолок возможного бонуса.
+	// Диапазон chassis: 0-35 (токены), CarLevel: 0-100
+	// Нормализуем chassis к той же шкале: chassis/35 * 100
+	chassisNorm := float64(car.Chassis) / 35.0 * 100.0
+	windowWidth := (chassisNorm + float64(team.CarLevel)) / 2.0
+ 
+	// Максимально возможный бонус от ширины окна: 0..20
+	maxBonus := windowWidth / 100.0 * 20.0
+ 
+	// Шанс на крит: среднее SimLevel и Experience пилота, оба 0-100
+	// При значении 100+100 шанс крита = 100%, при 0+0 = 0%
+	critChance := (float64(team.SimLevel) + float64(pilot.Experience)) / 2.0
+ 
+	// Бросок: если выпало меньше critChance — крит, иначе обычная настройка
+	roll := float64(e.r.Intn(100))
+ 
+	var setupQuality float64
+	if roll < critChance {
+		// Крит: качество настройки от 0.75 до 1.0
+		setupQuality = 0.75 + e.r.Float64()*0.25
+	} else {
+		// Обычная настройка: качество от 0.2 до 0.75
+		setupQuality = 0.2 + e.r.Float64()*0.55
+	}
+ 
+	return maxBonus * setupQuality
+}
+
 func calcCarScore(car models.Car, track models.Track) float64 {
 	components := []float64{
 		float64(car.AeroDynamic),
@@ -157,9 +187,10 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		tp := principals[t.ID]
 		
 		bonus, trackLvl := e.calcModifiers(p, t, c, track, tp, isRain)
+		settings := e.calcSetupBonus(p, t, c)
 		
 		// Квалификация
-		qualiPace := float64(p.QualifyingRating)*1.5 + bonus
+		qualiPace := float64(p.QualifyingRating)*1.5 + bonus + settings
 		variance := e.getVariance(p)
 		qualiScore := qualiPace + variance
 		
@@ -197,7 +228,7 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		}
 		
 		// Гонка (базовый темп)
-		racePace := float64(p.Rating) + bonus
+		racePace := float64(p.Rating) + bonus + settings
 		tyrePenalty := 0.0
 		if track.Tyre > p.TyreManagement {
 			tyrePenalty = float64(track.Tyre-p.TyreManagement) * 0.5
