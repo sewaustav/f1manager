@@ -103,7 +103,7 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 	
 	// 4. Соответствие машины типу трассы
 	carScore := calcCarScore(car, track)
-	carBonus := float64(team.CarLevel)*1.5 + carScore*2.4
+	carBonus := float64(team.CarLevel)*5.5 + carScore*2.4
 	
 	// 5. Погода
 	weatherMod := 0.0
