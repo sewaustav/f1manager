@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"math"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"f1/internal/models"
 	"f1/internal/storage"
+	"math"
 	"math/rand"
 	"sort"
 	"time"
@@ -24,12 +25,62 @@ func NewEngine(db *sql.DB) *Engine {
 	}
 }
 
+func calcCarScore(car models.Car, track models.Track) float64 {
+	components := []float64{
+		float64(car.AeroDynamic),
+		float64(car.Engine),
+		float64(car.Chassis),
+		float64(car.Floor),
+		float64(car.Tyres),
+	}
+	
+	// Среднее всех компонентов
+	sum := 0.0
+	for _, v := range components {
+		sum += v
+	}
+	avg := sum / float64(len(components))
+	
+	// Трек-специфичный компонент
+	var trackSpecific float64
+	switch track.DownForceLevel {
+	case models.HighDownforce:
+		trackSpecific = (float64(car.AeroDynamic) + float64(car.Floor)) / 2.0
+	case models.HighDrag:
+		trackSpecific = float64(car.Engine)
+	case models.MediumDownForce:
+		trackSpecific = (float64(car.Chassis) + float64(car.Tyres)) / 2.0
+	}
+	
+	// Базовый счёт: 60% общий уровень + 40% специализация
+	baseScore := avg*0.6 + trackSpecific*0.4
+	
+	// Штраф за разбаланс: дисперсия компонентов
+	variance := 0.0
+	for _, v := range components {
+		diff := v - avg
+		variance += diff * diff
+	}
+	variance /= float64(len(components))
+	stdDev := math.Sqrt(variance)
+	
+	balancePenalty := stdDev * 0.2
+	
+	return baseScore - balancePenalty
+}
+
 // Вычисление базовых модификаторов
 func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.Car, track models.Track, principal models.TeamPrincipal, isRain bool) (float64, float64) {
 	// 1. Штраф за углы настроек
 	synergyPenalty := 0.0
 	if pilot.SettingsAngle != car.SettingsAngle {
 		synergyPenalty = 10.0 * (1.0 - float64(pilot.Adaptiveness)/100.0)
+	}
+	
+	carFitPenalty := 0.0    
+	delta := abs(team.CarSettings - pilot.CarFit)
+	if delta > 3 {
+		carFitPenalty = float64(delta - 3) * 0.3
 	}
 	
 	ctx := context.Background()
@@ -51,16 +102,8 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 	principalBonus := float64(principal.Level) / 5.0
 	
 	// 4. Соответствие машины типу трассы
-	carFit := 0.0
-	switch track.DownForceLevel {
-	case models.HighDownforce:
-		carFit = float64(car.AeroDynamic+car.Floor) / 2.0
-	case models.HighDrag:
-		carFit = float64(car.Engine)
-	case models.MediumDownForce:
-		carFit = float64(car.Chassis+car.Tyres) / 2.0
-	}
-	carFit *= 2.5
+	carScore := calcCarScore(car, track)
+	carBonus := float64(team.CarLevel)*1.5 + carScore*2.4
 	
 	// 5. Погода
 	weatherMod := 0.0
@@ -75,9 +118,8 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 		}
 	}
 	
-	carBonus := float64(team.CarLevel)*1.5
 	
-	totalPaceBonus := carBonus + carFit + float64(pilotTrackLvl) + principalBonus + weatherMod - synergyPenalty - diffPenalty
+	totalPaceBonus := carBonus + float64(pilotTrackLvl) + principalBonus + weatherMod - synergyPenalty - diffPenalty - carFitPenalty
 	return totalPaceBonus, float64(pilotTrackLvl)
 }
 
@@ -160,6 +202,13 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		if track.Tyre > p.TyreManagement {
 			tyrePenalty = float64(track.Tyre-p.TyreManagement) * 0.5
 		}
+		
+		tyreBonus := 0.0
+		if p.Garage != nil && cars[*p.Garage].Tyres > 15 {
+			tyreBonus = float64(cars[*p.Garage].Tyres-15) * 0.4
+		}
+		
+		tyrePenalty = max(0, tyrePenalty - tyreBonus)
 		
 		startBonus := float64(p.Starting) / 5.0
 		styleBonus := 0.0
