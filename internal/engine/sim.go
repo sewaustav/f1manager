@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"f1/internal/models"
 	"f1/internal/storage"
+	"f1/internal/storage/sqlite_repo"
 	"math"
 	"math/rand"
 	"sort"
@@ -19,9 +20,9 @@ type Engine struct {
 
 func NewEngine(db *sql.DB) *Engine {
 	return &Engine{
-		db: db,
-		r:  rand.New(rand.NewSource(time.Now().UnixNano())),
-		repo: storage.NewSqliteF1Repo(db),
+		db:   db,
+		r:    rand.New(rand.NewSource(time.Now().UnixNano())),
+		repo: sqlite_repo.NewSqliteF1Repo(db),
 	}
 }
 

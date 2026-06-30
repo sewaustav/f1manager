@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"f1/internal/storage/sqlite_repo"
 	"fmt"
 	"log"
 	"os"
@@ -12,9 +13,8 @@ import (
 	
 	"f1/internal/cli"
 	"f1/internal/engine"
-	"f1/internal/storage"
-
-	_ "github.com/mattn/go-sqlite3" 
+	
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store := storage.NewSqliteF1Repo(db)
+	store := sqlite_repo.NewSqliteF1Repo(db)
 
 	simEngine := engine.NewEngine(db)
 	ui := cli.NewCLI(store, simEngine)

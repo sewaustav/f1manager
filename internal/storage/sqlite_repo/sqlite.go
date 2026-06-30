@@ -1,23 +1,24 @@
-package storage
+package sqlite_repo
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"f1/internal/models"
+	"f1/internal/storage"
 	"fmt"
 )
 
 type SqliteF1Repo struct {
-	db DBTX
-	tx Tx
+	db storage.DBTX
+	tx storage.Tx
 }
 
 func NewSqliteF1Repo(db *sql.DB) *SqliteF1Repo {
 	return &SqliteF1Repo{db: db}
 }
 
-func (s *SqliteF1Repo) Begin(ctx context.Context) (Tx, error) {
+func (s *SqliteF1Repo) Begin(ctx context.Context) (storage.Tx, error) {
 	base, ok := s.db.(*sql.DB)
 	if !ok {
 		return nil, fmt.Errorf("begin: underlying db is not *sql.DB")
@@ -31,7 +32,7 @@ func (s *SqliteF1Repo) Begin(ctx context.Context) (Tx, error) {
 	return tx, nil
 }
 
-func (s *SqliteF1Repo) WithTx(tx Tx) F1Repo {
+func (s *SqliteF1Repo) WithTx(tx storage.Tx) storage.F1Repo {
 	return &SqliteF1Repo{
 		db: s.db,
 		tx: tx,
