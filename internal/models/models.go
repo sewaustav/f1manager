@@ -142,14 +142,14 @@ type Team struct {
 }
 
 type Car struct {
-	TeamID      int64
-	AeroDynamic int
-	Engine      int
-	Chassis     int
-	Floor       int
-	Tyres       int
-	Reliability int // 35 tokens = 0% DNF chance
-	SettingsAngle  SettingsAngle
+	TeamID        int64
+	AeroDynamic   int
+	Engine        int
+	Chassis       int
+	Floor         int
+	Tyres         int
+	Reliability   int // 35 tokens = 0% DNF chance
+	SettingsAngle SettingsAngle
 }
 
 type TeamPrincipal struct {
@@ -187,15 +187,23 @@ type PlayerProfile struct {
 	Tokens        int
 }
 
+type MyTeam struct {
+	ID            int64         `json:"id"`
+	Pilot1        Pilot         `json:"pilot1"`
+	Pilot2        Pilot         `json:"pilot2"`
+	Team          Team          `json:"team"`
+	TeamPrincipal TeamPrincipal `json:"team_principal"`
+}
+
 // Структуры для вывода результатов гонки
 type RaceResult struct {
-	PilotID       int64
-	GarageID int64
-	PilotName     string
-	TeamName      string
-	QualiPosition int
-	RacePosition  int
-	Points        int
-	IsDNF         bool
-	DNFReason     string
+	PilotID       int64  `json:"pilot_id"`
+	GarageID      int64  `json:"garage_id"`
+	PilotName     string `json:"pilot_name"`
+	TeamName      string `json:"team_name"`
+	QualiPosition int    `json:"quali_position"`
+	RacePosition  int    `json:"race_position"`
+	Points        int    `json:"points"`
+	IsDNF         bool   `json:"is_dnf"`
+	DNFReason     string `json:"dnf_reason"`
 }
