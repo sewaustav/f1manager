@@ -374,13 +374,13 @@ func (c *CLI) putTokens(attempt, tokens int) (int, int, int, int, int, int, mode
 	fmt.Scanln(&floor)
 	fmt.Print("Токены на Шины: ")
 	fmt.Scanln(&tyres)
-	fmt.Print("Токены на Надежность (55 = 0% DNF): ")
+	fmt.Print("Токены на Надежность (35 = 0% DNF): ")
 	fmt.Scanln(&reliability)
 	fmt.Print("Настройка баланса: ")
 	fmt.Scanln(&angle)
 	
 	if aeroDynamic + engineTokens + chassis + floor + tyres + reliability > tokens {
-		fmt.Println("Сумма токенов должна быть равна %d!", tokens)
+		fmt.Println("Сумма токенов должна быть равна!", tokens)
 		if attempt < 3 {
 			attempt++
 			return c.putTokens(attempt + 1, tokens)
