@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/assert/v2 v2.2.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/lib/pq v1.12.3
 	github.com/mattn/go-sqlite3 v1.14.45
 	github.com/stretchr/testify v1.11.1
 )

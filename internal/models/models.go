@@ -207,3 +207,10 @@ type RaceResult struct {
 	IsDNF         bool   `json:"is_dnf"`
 	DNFReason     string `json:"dnf_reason"`
 }
+
+type Updates struct {
+	Team Team
+	Bonus int
+	Stage int64
+	Synergy int
+}

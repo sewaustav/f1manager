@@ -10,7 +10,11 @@ const (
 	readTimeout = 60 * time.Second
 )
 
-func (c *Client) readLoop() {
+func (c *Conn) readLoop() {
+	defer func() {
+		close(c.recv)
+		c.Close()
+	}()
 	
 	defer c.Close()
 	

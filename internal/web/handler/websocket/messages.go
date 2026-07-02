@@ -1,6 +1,6 @@
 package websocket
 
-func (c *Client) Send(msg []byte) {
+func (c *Conn) Send(msg []byte) {
 	
 	select {
 	
@@ -10,11 +10,15 @@ func (c *Client) Send(msg []byte) {
 	}
 }
 
-func (c *Client) Messages() <-chan []byte {
+func (c *Conn) Messages() <-chan []byte {
 	return c.recv
 }
 
-func (c *Client) Close() {
+func (c *Conn) Done() <-chan struct{} {
+	return c.done
+}
+
+func (c *Conn) Close() {
 	
 	c.once.Do(func() {
 		

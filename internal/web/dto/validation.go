@@ -23,6 +23,7 @@ const (
 type Updates struct {
 	Type  UpdateType `json:"type"`
 	Coast int        `json:"coast"`
+	Stage int64      `json:"stage"`
 }
 
 type RaceSetup struct {
@@ -47,4 +48,18 @@ const (
 type Draft struct {
 	Pick  DraftItem `json:"pick"`
 	Order int       `json:"order"`
+}
+
+type Group struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+type PilotTransfer struct {
+	PilotID int64 `json:"pilot_id"`
+}
+
+type PrincipalTransfer struct {
+	PrincipalID int64 `json:"principal_id"`
 }
