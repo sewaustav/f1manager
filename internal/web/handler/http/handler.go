@@ -38,7 +38,7 @@ func NewHttpHandler(
 }
 
 // --- Sim handlers ---
-
+// Fix service only but handler is fine
 func (h *HttpHandler) MakeUpdate(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -94,6 +94,7 @@ func (h *HttpHandler) ChooseSetup(c *gin.Context) {
 }
 
 // GetRaceResult возвращает результаты последней гонки группы.
+// Done
 func (h *HttpHandler) GetRaceResult(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -121,6 +122,7 @@ func (h *HttpHandler) GetRaceResult(c *gin.Context) {
 	})
 }
 
+// Done
 func (h *HttpHandler) GetStanding(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -149,7 +151,7 @@ func (h *HttpHandler) GetStanding(c *gin.Context) {
 }
 
 // --- CrossSeason handlers ---
-
+// TODO - rewrite for  new feature
 func (h *HttpHandler) MakeSetup(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -173,6 +175,9 @@ func (h *HttpHandler) MakeSetup(c *gin.Context) {
 	c.Status(201)
 }
 
+
+// Handler - fine, Service bad 
+// TODO - rewrite service
 func (h *HttpHandler) UpdateBase(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -426,6 +431,7 @@ func (h *HttpHandler) PickItem(c *gin.Context) {
 }
 
 // InitRound — организатор открывает приём сетапов перед этапом.
+// TODO - rewrite can only be used in the start of the sim
 func (h *HttpHandler) InitRound(c *gin.Context) {
 	user, exist := h.getUser(c)
 	if !exist {

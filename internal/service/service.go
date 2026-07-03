@@ -25,6 +25,7 @@ func New(static repo.StaticRepo, dynamic repo.DynamicRepo, eng *engine.Engine) *
 	}
 }
 
+// TODO - activate updates on the specific weekends but mayby not there
 func (s *Service) Simulate(ctx context.Context, groupID, stage int64) ([]models.RaceResult, error) {
 	track, err := s.static.GetTrack(ctx, stage)
 	if err != nil {
@@ -141,6 +142,7 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 		return err
 	}
 
+	// TODO - bring update only for exact races
 	switch req.Type {
 	case dto.CarUpdate:
 		update := s.сalculateUpdate(team, req.Coast, req.Stage)
@@ -149,7 +151,7 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 		return s.dynamic.UpgradeTeam(ctx, groupID, updatedTeam)
 
 	case dto.SynergyUpdate:
-		synergy := req.Coast * 2
+		synergy := req.Coast 
 		updatedTeam := team
 		updatedTeam.CarSettings = team.CarSettings + synergy
 		return s.dynamic.UpgradeTeam(ctx, groupID, updatedTeam)
@@ -161,6 +163,7 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 
 // ChooseSetup — игрок выбирает настройки болида перед гонкой (токены).
 // Вызывается диспетчером; сама логика применения — в SetupDispatcher.
+// TODO - do not reset tokens
 func (s *Service) ChooseSetup(ctx context.Context, userID int64, setup dto.Setup) error {
 	groupID, err := s.getUserGroup(ctx, userID)
 	if err != nil {
@@ -214,8 +217,8 @@ func (s *Service) UpdateBase(ctx context.Context, userID int64, req dto.BaseUpda
 	}
 
 	total := req.Base + req.Engineer + req.Tube + req.Sim
-	if total == 0 {
-		return errors.New("нужно указать хотя бы одно значение")
+	if req.Base > 10 || req.Engineer > 5 || req.Tube > 5 || req.Sim > 5 {
+		return fmt.Errorf("нельзя вложить в базу больше 10, а в остальные компоенты больше 5 млн.")
 	}
 
 	budget, err := s.dynamic.GetBudget(ctx, userID, groupID)
@@ -235,7 +238,7 @@ func (s *Service) UpdateBase(ctx context.Context, userID int64, req dto.BaseUpda
 	if err != nil {
 		return err
 	}
-
+	// rewrite - it is shit
 	updatedTeam := team
 	updatedTeam.BaseLevel += req.Base
 	updatedTeam.Engineer += req.Engineer
@@ -250,6 +253,8 @@ func (s *Service) UpdateBase(ctx context.Context, userID int64, req dto.BaseUpda
 }
 
 // PilotTransfer — покупка пилота у другого игрока или свободного агента.
+
+// TODO - fix this we need to confirmation from owner 
 func (s *Service) PilotTransfer(ctx context.Context, userID int64, req dto.PilotTransfer) error {
 	groupID, err := s.getUserGroup(ctx, userID)
 	if err != nil {
@@ -266,8 +271,8 @@ func (s *Service) PilotTransfer(ctx context.Context, userID int64, req dto.Pilot
 		return err
 	}
 
-	if budget < pilot.Price {
-		return fmt.Errorf("недостаточно бюджета: нужно %d млн, есть %d млн", pilot.Price, budget)
+	if budget < req.Price {
+		return fmt.Errorf("недостаточно бюджета: нужно %d млн, есть %d млн", req.Price, budget)
 	}
 
 	player, err := s.dynamic.GetPlayer(ctx, userID, groupID)
@@ -288,6 +293,7 @@ func (s *Service) PilotTransfer(ctx context.Context, userID int64, req dto.Pilot
 }
 
 // PrincipalTransfer — смена тимпринципала.
+// TODO - FIX we need to check is principal free
 func (s *Service) PrincipalTransfer(ctx context.Context, userID int64, req dto.PrincipalTransfer) error {
 	groupID, err := s.getUserGroup(ctx, userID)
 	if err != nil {
@@ -321,6 +327,7 @@ func (s *Service) PrincipalTransfer(ctx context.Context, userID int64, req dto.P
 }
 
 // ResetSeason — сброс после сезона (токены/бюджет).
+// TODO - FIX reset tockens by team place
 func (s *Service) ResetSeason(ctx context.Context, groupID int64) error {
 	return s.dynamic.ResetTokensAndBudget(ctx, groupID)
 }

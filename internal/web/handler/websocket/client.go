@@ -41,7 +41,7 @@ func New(url string) (*Client, error) {
 		done: make(chan struct{}),
 	}
 	
-	go c.readLoop()
+	go conn.readLoop()
 	go c.writeLoop()
 	
 	return c, nil

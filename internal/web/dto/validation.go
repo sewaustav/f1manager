@@ -58,8 +58,10 @@ type Group struct {
 
 type PilotTransfer struct {
 	PilotID int64 `json:"pilot_id"`
+	Price   int   `json:"price"`
 }
 
 type PrincipalTransfer struct {
 	PrincipalID int64 `json:"principal_id"`
+	Price       int   `json:"price"`
 }
