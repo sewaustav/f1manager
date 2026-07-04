@@ -92,3 +92,46 @@ func (s *Service) bringUpdate(ctx context.Context, groupID, stage int64)  {
 		}
 	}
 }
+
+func (s *Service) calcBonus(input int) int {
+	weights := map[int][]int{
+		0:  {100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		1:  {45, 35, 15, 5, 0, 0, 0, 0, 0, 0, 0},
+		2:  {25, 45, 20, 7, 3, 0, 0, 0, 0, 0, 0},
+		3:  {12, 25, 40, 15, 6, 2, 0, 0, 0, 0, 0},
+		4:  {6, 12, 25, 35, 15, 5, 2, 0, 0, 0, 0},
+		5:  {3, 6, 15, 40, 25, 8, 3, 0, 0, 0, 0},
+		6:  {1, 4, 10, 25, 40, 15, 5, 0, 0, 0, 0},
+		7:  {0, 2, 5, 13, 45, 25, 10, 0, 0, 0, 0},
+		8:  {0, 0, 3, 7, 15, 50, 25, 0, 0, 0, 0},
+		9:  {0, 0, 0, 4, 11, 40, 45, 0, 0, 0, 0},
+		10: {0, 0, 0, 5, 10, 30, 55, 0, 0, 0, 0},
+	}
+	
+	currentWeights, exists := weights[input]
+	if !exists {
+		return 0
+	}
+	
+	roll := rand.Intn(100)
+	accumulator := 0
+	
+	for choice, weight := range currentWeights {
+		accumulator += weight
+		if roll < accumulator {
+			return choice
+		}
+	}
+	
+	return input
+}
+
+func (s *Service) getBonus(price, maxPrice int) int {
+	if price == 0 {
+		return s.calcBonus(maxPrice/2) * -1
+	} else if price > maxPrice {
+		return s.calcBonus(maxPrice)
+	}
+	
+	return s.calcBonus(price)
+}

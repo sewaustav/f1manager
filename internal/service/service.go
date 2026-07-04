@@ -13,27 +13,26 @@ import (
 )
 
 type Service struct {
-	static  repo.StaticRepo
-	dynamic repo.DynamicRepo
-	engine  *engine.Engine
+	static      repo.StaticRepo
+	dynamic     repo.DynamicRepo
+	engine      *engine.Engine
 	updateCache UpdateCache
 }
 
 func New(static repo.StaticRepo, dynamic repo.DynamicRepo, eng *engine.Engine, updateCache UpdateCache) *Service {
 	return &Service{
-		static:  static,
-		dynamic: dynamic,
-		engine:  eng,
+		static:      static,
+		dynamic:     dynamic,
+		engine:      eng,
 		updateCache: updateCache,
 	}
 }
 
-// TODO - activate updates on the specific weekends but mayby not there
 func (s *Service) Simulate(ctx context.Context, groupID, stage int64) ([]models.RaceResult, error) {
 	if stage == 7 || stage == 12 || stage == 18 {
 		s.bringUpdate(ctx, groupID, stage)
 	}
-	
+
 	track, err := s.static.GetTrack(ctx, stage)
 	if err != nil {
 		return nil, err
@@ -116,8 +115,6 @@ func (s *Service) GetStanding(ctx context.Context, groupID int64) (map[int64]int
 	return s.dynamic.GetStanding(ctx, groupID)
 }
 
-// MakeUpdate — обновление болида за бюджет между этапами (car upgrade или synergy).
-// TODO - rewrite
 func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates) error {
 	groupID, err := s.getUserGroup(ctx, userID)
 	if err != nil {
@@ -149,7 +146,7 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 	if err = s.dynamic.UpdateBudget(ctx, userID, groupID, int(math.Abs(float64(req.Coast)))); err != nil {
 		return err
 	}
-	
+
 	switch req.Type {
 	case dto.CarUpdate:
 		update := s.calculateUpdate(team, req.Coast, req.Stage)
@@ -157,6 +154,7 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 			Key:      fmt.Sprintf("%d-%d", userID, groupID),
 			PlayerID: userID,
 			GroupID:  groupID,
+			TeamID:   player.Team,
 			Stage:    req.Stage,
 			Bonus:    update.Bonus,
 			Type:     Car,
@@ -168,6 +166,7 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 			Key:      fmt.Sprintf("%d-%d", userID, groupID),
 			PlayerID: userID,
 			GroupID:  groupID,
+			TeamID:   player.Team,
 			Stage:    req.Stage,
 			Bonus:    req.Coast,
 			Type:     Synergy,
@@ -234,8 +233,17 @@ func (s *Service) UpdateBase(ctx context.Context, userID int64, req dto.BaseUpda
 	}
 
 	total := req.Base + req.Engineer + req.Tube + req.Sim
-	if req.Base > 10 || req.Engineer > 5 || req.Tube > 5 || req.Sim > 5 {
-		return fmt.Errorf("нельзя вложить в базу больше 10, а в остальные компоенты больше 5 млн.")
+	if req.Base > 10 {
+		req.Base = 10
+	}
+	if req.Engineer > 5 {
+		req.Engineer = 5
+	}
+	if req.Tube > 5 {
+		req.Tube = 5
+	}
+	if req.Sim > 5 {
+		req.Sim = 5
 	}
 
 	budget, err := s.dynamic.GetBudget(ctx, userID, groupID)
@@ -255,12 +263,22 @@ func (s *Service) UpdateBase(ctx context.Context, userID int64, req dto.BaseUpda
 	if err != nil {
 		return err
 	}
-	// rewrite - it is shit
+	
 	updatedTeam := team
-	updatedTeam.BaseLevel += req.Base
-	updatedTeam.Engineer += req.Engineer
-	updatedTeam.TubeLevel += req.Tube
-	updatedTeam.SimLevel += req.Sim
+	
+	// for future - include drivers to the function
+	newCar := (team.CarLevel + team.BaseLevel + team.Engineer + team.TubeLevel + team.SimLevel) / 5
+	
+	newBase := min(team.BaseLevel + s.getBonus(req.Base, 10), 100)
+	newEngineer := min(team.Engineer + s.getBonus(req.Engineer, 5), 5)
+	newTube := min(team.TubeLevel + s.getBonus(req.Tube, 5), 5)
+	newSim := min(team.SimLevel + s.getBonus(req.Sim, 5), 5)
+	
+	updatedTeam.BaseLevel = newBase
+	updatedTeam.Engineer = newEngineer
+	updatedTeam.TubeLevel = newTube
+	updatedTeam.SimLevel = newSim
+	updatedTeam.CarLevel = newCar
 
 	if err = s.dynamic.UpdateTeam(ctx, userID, updatedTeam); err != nil {
 		return err
@@ -271,7 +289,7 @@ func (s *Service) UpdateBase(ctx context.Context, userID int64, req dto.BaseUpda
 
 // PilotTransfer — покупка пилота у другого игрока или свободного агента.
 
-// TODO - fix this we need to confirmation from owner 
+// TODO - fix this we need to confirmation from owner
 func (s *Service) PilotTransfer(ctx context.Context, userID int64, req dto.PilotTransfer) error {
 	groupID, err := s.getUserGroup(ctx, userID)
 	if err != nil {
