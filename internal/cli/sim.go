@@ -11,7 +11,7 @@ import (
 	"strconv"
 )
 
-func (c *CLI) сalculateUpdate(team models.Team, investment int, stage int64) *Updates {
+func (c *CLI) calculateUpdate(team models.Team, investment int, stage int64) *Updates {
 	components := []int{team.BaseLevel, team.Engineer, team.SimLevel, team.TubeLevel}
 	
 	sum := 0
@@ -94,7 +94,7 @@ func (c *CLI) updateCar(ctx context.Context, team models.Team, budget int, stage
 				return nil
 			}
 			
-			return c.сalculateUpdate(team, amount, stage)
+			return c.calculateUpdate(team, amount, stage)
 			
 			
 		} else if choice == "2" {

@@ -8,6 +8,7 @@ import (
 	repo "f1/internal/new_storage"
 	"f1/internal/web/dto"
 	"fmt"
+	"math"
 	"slices"
 )
 
@@ -15,18 +16,24 @@ type Service struct {
 	static  repo.StaticRepo
 	dynamic repo.DynamicRepo
 	engine  *engine.Engine
+	updateCache UpdateCache
 }
 
-func New(static repo.StaticRepo, dynamic repo.DynamicRepo, eng *engine.Engine) *Service {
+func New(static repo.StaticRepo, dynamic repo.DynamicRepo, eng *engine.Engine, updateCache UpdateCache) *Service {
 	return &Service{
 		static:  static,
 		dynamic: dynamic,
 		engine:  eng,
+		updateCache: updateCache,
 	}
 }
 
 // TODO - activate updates on the specific weekends but mayby not there
 func (s *Service) Simulate(ctx context.Context, groupID, stage int64) ([]models.RaceResult, error) {
+	if stage == 7 || stage == 12 || stage == 18 {
+		s.bringUpdate(ctx, groupID, stage)
+	}
+	
 	track, err := s.static.GetTrack(ctx, stage)
 	if err != nil {
 		return nil, err
@@ -110,6 +117,7 @@ func (s *Service) GetStanding(ctx context.Context, groupID int64) (map[int64]int
 }
 
 // MakeUpdate — обновление болида за бюджет между этапами (car upgrade или synergy).
+// TODO - rewrite
 func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates) error {
 	groupID, err := s.getUserGroup(ctx, userID)
 	if err != nil {
@@ -138,23 +146,32 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 		return err
 	}
 
-	if err = s.dynamic.UpdateBudget(ctx, userID, groupID, req.Coast); err != nil {
+	if err = s.dynamic.UpdateBudget(ctx, userID, groupID, int(math.Abs(float64(req.Coast)))); err != nil {
 		return err
 	}
-
-	// TODO - bring update only for exact races
+	
 	switch req.Type {
 	case dto.CarUpdate:
-		update := s.сalculateUpdate(team, req.Coast, req.Stage)
-		updatedTeam := team
-		updatedTeam.CarLevel = team.CarLevel + update.Bonus
-		return s.dynamic.UpgradeTeam(ctx, groupID, updatedTeam)
+		update := s.calculateUpdate(team, req.Coast, req.Stage)
+		newUpdate := Update{
+			Key:      fmt.Sprintf("%d-%d", userID, groupID),
+			PlayerID: userID,
+			GroupID:  groupID,
+			Stage:    req.Stage,
+			Bonus:    update.Bonus,
+			Type:     Car,
+		}
+		return s.updateCache.PutUpdate(ctx, newUpdate)
 
 	case dto.SynergyUpdate:
-		synergy := req.Coast 
-		updatedTeam := team
-		updatedTeam.CarSettings = team.CarSettings + synergy
-		return s.dynamic.UpgradeTeam(ctx, groupID, updatedTeam)
+		return s.updateCache.PutUpdate(ctx, Update{
+			Key:      fmt.Sprintf("%d-%d", userID, groupID),
+			PlayerID: userID,
+			GroupID:  groupID,
+			Stage:    req.Stage,
+			Bonus:    req.Coast,
+			Type:     Synergy,
+		})
 
 	default:
 		return errors.New("неизвестный тип обновления")

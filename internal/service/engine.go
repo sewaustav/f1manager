@@ -1,12 +1,13 @@
 package service
 
 import (
+	"context"
 	"f1/internal/models"
 	"math"
 	"math/rand"
 )
 
-func (s *Service) сalculateUpdate(team models.Team, investment int, stage int64) *models.Updates {
+func (s *Service) calculateUpdate(team models.Team, investment int, stage int64) *models.Updates {
 	components := []int{team.BaseLevel, team.Engineer, team.SimLevel, team.TubeLevel}
 	
 	sum := 0
@@ -60,5 +61,34 @@ func (s *Service) сalculateUpdate(team models.Team, investment int, stage int64
 		Bonus:   roundedBonus + team.UpdateRating,
 		Stage:   stage,
 		Synergy: 0,
+	}
+}
+
+func (s *Service) bringUpdate(ctx context.Context, groupID, stage int64)  {
+	updates, err := s.updateCache.GetUpdates(ctx, groupID)
+	if err != nil {
+		return
+	}
+
+	for _, update := range updates {
+		if stage == update.Stage {
+			s.updateCache.DeleteUpdate(ctx, update.Key) // if update can`t be deleted, it shouldn`t broke application 
+			team, err := s.dynamic.GetTeamByGroup(ctx, update.TeamID, groupID)
+			if err != nil {
+				continue
+			}
+			
+			if update.Type == Car {
+				team.CarLevel += update.Bonus
+			} else if update.Type == Synergy {
+				team.CarSettings += update.Bonus
+				
+			} else {
+				continue
+			}
+			if err = s.dynamic.UpdateTeam(ctx, update.PlayerID, team); err != nil {
+				continue
+			}
+		}
 	}
 }
