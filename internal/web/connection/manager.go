@@ -12,12 +12,14 @@ type Manager struct {
 	mu     sync.RWMutex
 	users  map[int64]*Session            // userID -> Session
 	groups map[int64]map[int64]*Session  // groupID -> userID -> Session
+	sessions map[int64]*Session           // Added to hold sessions
 }
 
 func NewManager() *Manager {
 	return &Manager{
 		users:  make(map[int64]*Session),
 		groups: make(map[int64]map[int64]*Session),
+		sessions: make(map[int64]*Session), // Initialize sessions
 	}
 }
 
@@ -32,6 +34,7 @@ func (m *Manager) Register(userID, groupID int64, conn *ws.Conn) *Session {
 
 	m.mu.Lock()
 	m.users[userID] = s
+	m.sessions[userID] = s // Store session in sessions map
 	if m.groups[groupID] == nil {
 		m.groups[groupID] = make(map[int64]*Session)
 	}
@@ -53,6 +56,7 @@ func (m *Manager) Unregister(userID, groupID int64) {
 	defer m.mu.Unlock()
 
 	delete(m.users, userID)
+	delete(m.sessions, userID) // Remove session from sessions map
 
 	if group, ok := m.groups[groupID]; ok {
 		delete(group, userID)
@@ -90,4 +94,12 @@ func (m *Manager) GroupSize(groupID int64) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.groups[groupID])
+}
+
+// GetSession возвращает активную сессию пользователя, если она существует.
+func (m *Manager) GetSession(userID int64) (*Session, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.sessions[userID]
+	return s, ok
 }

@@ -176,8 +176,6 @@ func (h *HttpHandler) MakeSetup(c *gin.Context) {
 }
 
 
-// Handler - fine, Service bad 
-// TODO - rewrite service
 func (h *HttpHandler) UpdateBase(c *gin.Context) {
 	ctx := c.Request.Context()
 
