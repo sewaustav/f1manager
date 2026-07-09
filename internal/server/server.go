@@ -58,7 +58,10 @@ func New(cfg config.Config) (*Server, error) {
 	disp := dispatcher.New(svc, manager)
 	gameHandler := webhttp.NewHttpHandler(svc, svc, svc, svc, manager, disp)
 
-	router := setupRouter(cfg, authHandler, gameHandler, middleware)
+	draftDisp := dispatcher.NewDraft(svc, manager)
+	draftHandler := webhttp.NewDraftHandler(draftDisp, svc)
+
+	router := setupRouter(cfg, authHandler, draftHandler, gameHandler, middleware)
 
 	return &Server{
 		httpServer: &http.Server{
