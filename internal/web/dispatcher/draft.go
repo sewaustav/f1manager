@@ -75,6 +75,11 @@ func NewDraft(service DraftService, notifier DraftNotifier) *DraftDispatcher {
 	}
 }
 
+// SetShuffle задаёт функцию перемешивания порядка (для детерминизма в тестах).
+func (d *DraftDispatcher) SetShuffle(fn func([]int64)) {
+	d.shuffle = fn
+}
+
 // StartDraft тасует игроков, строит очередь ходов и уведомляет первого.
 func (d *DraftDispatcher) StartDraft(ctx context.Context, groupID int64) error {
 	players, err := d.service.ListGroupPlayers(ctx, groupID)
