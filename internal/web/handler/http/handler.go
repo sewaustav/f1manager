@@ -65,7 +65,7 @@ func (h *HttpHandler) HandleWs(c *gin.Context) {
 	}
 
 	conn := ws.NewConn(rawConn)
-	h.manager.Register(user, *groupID, *conn)
+	h.manager.Register(user, *groupID, conn)
 	// Всё — соединение живёт, горутины внутри conn и session работают сами.
 	// Авто-дерегистрация при разрыве происходит в Manager.Register.
 }

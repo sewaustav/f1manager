@@ -37,3 +37,7 @@ go.work.sum
 # others
 dto.go
 TODO.md
+
+# JWT keys
+keys/
+*.pem
