@@ -218,3 +218,29 @@ After the full season, additional adjustments apply for: championship win, seaso
 | Racing Bulls | RBPT | 130M |
 | Haas | Ferrari | 100M |
 | Cadillac | Cadillac | 150M |
+
+---
+
+## 🔐 Запуск API-сервера
+
+Сгенерировать RSA-ключи для JWT:
+
+```bash
+mkdir -p keys
+openssl genrsa -out keys/jwt_private.pem 2048
+openssl rsa -in keys/jwt_private.pem -pubout -out keys/jwt_public.pem
+```
+
+Обязательные env: `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`.
+Опциональные (дефолты): `HTTP_PORT=8080`, `DB_HOST=localhost`, `DB_PORT=5432`,
+`DB_USER=postgres`, `DB_PASSWORD=`, `DB_NAME=f1`, `JWT_ISSUER=f1manager`,
+`JWT_AUDIENCE=f1manager`, `ACCESS_TTL=6h`, `REFRESH_TTL=720h`,
+`CORS_ORIGINS=http://localhost:5173`.
+
+Access-токен живёт 6 часов, refresh — 30 дней с ротацией при каждом обновлении;
+logout отзывает все refresh-сессии пользователя.
+
+Эндпоинты auth: `POST /api/v1/auth/register|login|refresh` (публичные),
+`POST /api/v1/auth/logout` (Bearer). Все игровые роуты — под JWT-middleware.
+
+Точка входа: `server.New(cfg)` + `Run(ctx)` (пакет `internal/server`), main добавляется отдельно.

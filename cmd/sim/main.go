@@ -43,7 +43,7 @@ func main() {
 	defer cancel()
 	
 	if err := store.ResetSession(shutdown); err != nil {
-		fmt.Errorf("Ошибка при сбросе сессии: %v", err)
+		fmt.Printf("Ошибка при сбросе сессии: %v\n", err)
 	}
 	
 	<-shutdown.Done()
