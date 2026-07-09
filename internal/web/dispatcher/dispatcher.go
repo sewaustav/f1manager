@@ -8,38 +8,37 @@ import (
 	"sync"
 )
 
-// RaceService — контракт на симуляцию, который диспетчер вызывает после сбора всех сетапов.
+// RaceService — контракт на симуляцию.
 type RaceService interface {
 	ChooseSetup(ctx context.Context, userID int64, setup dto.Setup) error
 	Simulate(ctx context.Context, groupID, stage int64) ([]models.RaceResult, error)
 }
 
-// Notifier — контракт для WS-рассылки всем участникам группы.
+// Notifier — WS-рассылка всем участникам группы.
 type Notifier interface {
 	BroadcastGroup(groupID int64, msg []byte)
 	GroupSize(groupID int64) int
 }
 
-// raceReadyMsg — сообщение, которое отправляется по WS после завершения гонки.
 type raceReadyMsg struct {
 	Status string `json:"status"`
 	Stage  int64  `json:"stage"`
 }
 
-// groupState — состояние ожидания сетапов для одной группы на одном этапе.
+// groupState — состояние ожидания сетапов одной группы на одном этапе.
 type groupState struct {
-	mu          sync.Mutex
-	stage       int64
+	mu           sync.Mutex
+	stage        int64
 	totalPlayers int
-	received    map[int64]struct{} // userID -> подтверждение получено
+	received     map[int64]struct{} // userID -> получено
+	launched     bool               // симуляция уже запущена
 }
 
 // Dispatcher ждёт сетапы от всех игроков группы.
-// Как только все игроки группы прислали свой сетап — запускает симуляцию
-// и рассылает WS-уведомление.
+// Когда все прислали — запускает симуляцию и рассылает WS-уведомление.
 type Dispatcher struct {
-	mu       sync.RWMutex
-	groups   map[int64]*groupState // groupID -> state
+	mu      sync.RWMutex
+	groups  map[int64]*groupState
 
 	service  RaceService
 	notifier Notifier
@@ -54,8 +53,7 @@ func New(service RaceService, notifier Notifier) *Dispatcher {
 }
 
 // InitRound инициализирует новый раунд для группы перед этапом.
-// totalPlayers — количество игроков, от которых ждём сетап.
-// Вызывается когда организатор открывает приём сетапов (например, отдельным HTTP-хэндлером).
+// Вызывается организатором через HTTP перед открытием приёма сетапов.
 func (d *Dispatcher) InitRound(groupID, stage int64, totalPlayers int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -68,8 +66,8 @@ func (d *Dispatcher) InitRound(groupID, stage int64, totalPlayers int) {
 }
 
 // Submit принимает сетап от игрока.
-// Применяет сетап через сервис, затем проверяет — если все игроки прислали,
-// запускает симуляцию в горутине.
+// Применяет сетап, затем проверяет — если все игроки прислали, запускает симуляцию.
+// Гарантирует что симуляция запускается ровно один раз даже при конкурентных вызовах.
 func (d *Dispatcher) Submit(ctx context.Context, userID, groupID int64, setup dto.Setup) error {
 	if err := d.service.ChooseSetup(ctx, userID, setup); err != nil {
 		return err
@@ -80,17 +78,22 @@ func (d *Dispatcher) Submit(ctx context.Context, userID, groupID int64, setup dt
 	d.mu.RUnlock()
 
 	if !ok {
-		// Раунд не инициализирован — просто применяем сетап без ожидания
+		// Раунд не инициализирован — сетап применён, ждать остальных не нужно.
 		return nil
 	}
 
 	state.mu.Lock()
 	state.received[userID] = struct{}{}
-	allReady := len(state.received) >= state.totalPlayers
+	allReady := len(state.received) >= state.totalPlayers && !state.launched
+	if allReady {
+		state.launched = true // флаг внутри того же лока — гарантия единственного запуска
+	}
 	stage := state.stage
 	state.mu.Unlock()
 
 	if allReady {
+		// Удаляем группу из ожидания до запуска горутины — новые Submit
+		// просто пройдут путь "раунд не инициализирован".
 		d.mu.Lock()
 		delete(d.groups, groupID)
 		d.mu.Unlock()
@@ -103,20 +106,14 @@ func (d *Dispatcher) Submit(ctx context.Context, userID, groupID int64, setup dt
 
 func (d *Dispatcher) runRace(ctx context.Context, groupID, stage int64) {
 	_, err := d.service.Simulate(ctx, groupID, stage)
+
+	var msg []byte
 	if err != nil {
-		// Логируем ошибку; нотифицируем с ошибочным статусом
-		msg := mustMarshal(raceReadyMsg{
-			Status: "error",
-			Stage:  stage,
-		})
-		d.notifier.BroadcastGroup(groupID, msg)
-		return
+		msg = mustMarshal(raceReadyMsg{Status: "error", Stage: stage})
+	} else {
+		msg = mustMarshal(raceReadyMsg{Status: "race_finished", Stage: stage})
 	}
 
-	msg := mustMarshal(raceReadyMsg{
-		Status: "race_finished",
-		Stage:  stage,
-	})
 	d.notifier.BroadcastGroup(groupID, msg)
 }
 

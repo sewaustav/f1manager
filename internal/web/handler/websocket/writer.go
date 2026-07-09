@@ -20,7 +20,6 @@ func (c *Conn) writeLoop() {
 
 	for {
 		select {
-
 		case msg, ok := <-c.send:
 			if !ok {
 				return

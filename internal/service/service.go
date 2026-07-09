@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"f1/internal/engine"
 	"f1/internal/models"
@@ -11,7 +10,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"time"
 )
 
 // transferConfirmMsg — WS-сообщение, которое уходит владельцу пилота.
@@ -21,14 +19,6 @@ type transferConfirmMsg struct {
 	Price   int    `json:"price"`
 }
 
-// transferResponseMsg — ответ от владельца.
-type transferResponseMsg struct {
-	Type    string `json:"type"`   // "transfer_response"
-	PilotID int64  `json:"pilot_id"`
-	Accept  bool   `json:"accept"`
-}
-
-const transferTimeout = 60 * time.Second
 
 type Service struct {
 	static          repo.StaticRepo
@@ -307,97 +297,6 @@ func (s *Service) UpdateBase(ctx context.Context, userID int64, req dto.BaseUpda
 	return s.dynamic.UpdateBudget(ctx, userID, groupID, total)
 }
 
-// PilotTransfer — покупка пилота у другого игрока или свободного агента.
-func (s *Service) PilotTransfer(ctx context.Context, buyerUserID int64, req dto.PilotTransfer) error {
-	pilot, err := s.static.GetPilot(ctx, req.PilotID)
-	if err != nil {
-		return err
-	}
-
-	groupID, err := s.dynamic.GetUserGroup(ctx, buyerUserID)
-	if err != nil || groupID == nil {
-		return errors.New("group not found")
-	}
-
-	budget, err := s.dynamic.GetBudget(ctx, buyerUserID, *groupID)
-	if err != nil {
-		return err
-	}
-	if budget < req.Price {
-		return errors.New("not enough budget")
-	}
-
-	if pilot.Team == nil {
-		if err := s.dynamic.ExecutePilotTransfer(ctx, req.PilotID, 0, buyerUserID, req.Price); err != nil {
-			return err
-		}
-		return s.dynamic.UpdateBudget(ctx, buyerUserID, *groupID, -req.Price)
-	}
-
-	ownerPlayer, err := s.getOwnerByTeam(ctx, *pilot.Team, *groupID)
-	if err != nil {
-		return fmt.Errorf("owner not found: %w", err)
-	}
-
-	session, ok := s.sessionProvider.GetSession(ownerPlayer)
-	if !ok {
-		return errors.New("owner is not connected")
-	}
-
-	msg, _ := json.Marshal(transferConfirmMsg{
-		Type:    "transfer_request",
-		PilotID: req.PilotID,
-		Price:   req.Price,
-	})
-	session.Send(msg)
-
-	timeout := time.NewTimer(transferTimeout)
-	defer timeout.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-
-		case <-timeout.C:
-			return errors.New("transfer confirmation timed out")
-
-		case <-session.Done():
-			return errors.New("owner disconnected before confirming")
-
-		case raw, ok := <-session.Messages():
-			if !ok {
-				return errors.New("owner session closed")
-			}
-
-			var resp transferResponseMsg
-			if err := json.Unmarshal(raw, &resp); err != nil {
-				continue
-			}
-			if resp.Type != "transfer_response" || resp.PilotID != req.PilotID {
-				continue
-			}
-
-			if !resp.Accept {
-				return errors.New("transfer declined by owner")
-			}
-
-			if err := s.dynamic.ExecutePilotTransfer(ctx, req.PilotID, *pilot.Team, buyerUserID, req.Price); err != nil {
-				return err
-			}
-
-			if err := s.dynamic.UpdateBudget(ctx, buyerUserID, *groupID, -req.Price); err != nil {
-				return err
-			}
-
-			if err := s.dynamic.UpdateBudget(ctx, ownerPlayer, *groupID, req.Price); err != nil {
-				return err
-			}
-
-			return nil
-		}
-	}
-}
 
 // getOwnerByTeam возвращает userID игрока, которому принадлежит данная команда в группе.
 func (s *Service) getOwnerByTeam(ctx context.Context, teamID, groupID int64) (int64, error) {

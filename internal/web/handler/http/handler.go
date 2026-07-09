@@ -11,7 +11,7 @@ import (
 )
 
 type HttpHandler struct {
-	sim        Sim
+	sim         Sim
 	crossSeason CrossSeason
 	data        Data
 	userData    User
@@ -37,16 +37,15 @@ func NewHttpHandler(
 	}
 }
 
-// --- Sim handlers ---
-// Fix service only but handler is fine
-func (h *HttpHandler) MakeUpdate(c *gin.Context) {
-	ctx := c.Request.Context()
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
-	var req dto.Updates
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
+// HandleWs апгрейдит HTTP → WS, регистрирует сессию в менеджере.
+// Сессия сама запускает dispatchLoop для входящих сообщений.
+// Соединение живёт до тех пор, пока клиент не закроет его.
+func (h *HttpHandler) HandleWs(c *gin.Context) {
+	ctx := c.Request.Context()
 
 	user, exist := h.getUser(c)
 	if !exist {
@@ -54,16 +53,25 @@ func (h *HttpHandler) MakeUpdate(c *gin.Context) {
 		return
 	}
 
-	if err := h.crossSeason.MakeUpdate(ctx, user, req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	groupID, err := h.userData.GetUserGroup(ctx, user)
+	if err != nil || groupID == nil {
+		c.JSON(400, gin.H{"error": "group not found"})
 		return
 	}
 
-	c.Status(200)
+	rawConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+
+	conn := ws.NewConn(rawConn)
+	h.manager.Register(user, *groupID, *conn)
+	// Всё — соединение живёт, горутины внутри conn и session работают сами.
+	// Авто-дерегистрация при разрыве происходит в Manager.Register.
 }
 
-// ChooseSetup принимает сетап игрока и передаёт в диспетчер.
-// Диспетчер сам следит за готовностью всей группы и запускает симуляцию.
+// --- Sim handlers ---
+
 func (h *HttpHandler) ChooseSetup(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -93,8 +101,6 @@ func (h *HttpHandler) ChooseSetup(c *gin.Context) {
 	c.Status(200)
 }
 
-// GetRaceResult возвращает результаты последней гонки группы.
-// Done
 func (h *HttpHandler) GetRaceResult(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -116,13 +122,9 @@ func (h *HttpHandler) GetRaceResult(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"stage":   stage,
-		"results": results,
-	})
+	c.JSON(200, gin.H{"stage": stage, "results": results})
 }
 
-// Done
 func (h *HttpHandler) GetStanding(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -144,26 +146,46 @@ func (h *HttpHandler) GetStanding(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"drivers": drivers,
-		"teams":   teams,
-	})
+	c.JSON(200, gin.H{"drivers": drivers, "teams": teams})
 }
 
 // --- CrossSeason handlers ---
-// TODO - rewrite for  new feature
-func (h *HttpHandler) MakeSetup(c *gin.Context) {
+
+func (h *HttpHandler) MakeUpdate(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	var req dto.Setup
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+
+	var req dto.Updates
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
+	if err := h.crossSeason.MakeUpdate(ctx, user, req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(200)
+}
+
+func (h *HttpHandler) MakeSetup(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	user, exists := h.getUser(c)
 	if !exists {
 		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+
+	var req dto.Setup
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -174,7 +196,6 @@ func (h *HttpHandler) MakeSetup(c *gin.Context) {
 
 	c.Status(201)
 }
-
 
 func (h *HttpHandler) UpdateBase(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -238,6 +259,29 @@ func (h *HttpHandler) PrincipalTransfer(c *gin.Context) {
 	}
 
 	if err := h.crossSeason.PrincipalTransfer(ctx, user, req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(200)
+}
+
+func (h *HttpHandler) PickItem(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+
+	var req dto.DraftItem
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.crossSeason.PickItem(ctx, user, req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -353,83 +397,55 @@ func (h *HttpHandler) GetPlayersSquad(c *gin.Context) {
 	c.JSON(200, squads)
 }
 
-// --- WebSocket ---
+// --- Users ---
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+func (h *HttpHandler) RegisterGroup(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var group dto.Group
+	if err := c.ShouldBindJSON(&group); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.userData.RegisterGroup(ctx, user, group); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "group registered"})
 }
 
-func (h *HttpHandler) HandleWs(c *gin.Context) {
+func (h *HttpHandler) JoinGroup(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	user, exist := h.getUser(c)
 	if !exist {
-		c.JSON(403, gin.H{"error": "user not found"})
+		c.JSON(403, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	group, err := h.userData.GetUserGroup(ctx, user)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	if group == nil {
-		c.JSON(400, gin.H{"error": "user group not found"})
-		return
-	}
-
-	rawConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		return
-	}
-
-	wsConn := ws.NewConn(rawConn)
-	session := h.manager.Register(user, *group, *wsConn)
-
-	go func() {
-		for {
-			select {
-			case msg, ok := <-session.Messages():
-				if !ok {
-					return
-				}
-				h.handleIncoming(user, msg)
-			case <-session.Done():
-				return
-			}
-		}
-	}()
-}
-
-func (h *HttpHandler) handleIncoming(user int64, msg []byte) {
-}
-
-// PickItem — используется в черновике драфта (реализация позже).
-func (h *HttpHandler) PickItem(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	user, exist := h.getUser(c)
-	if !exist {
-		c.JSON(403, gin.H{"error": "user not found"})
-		return
-	}
-
-	var req dto.DraftItem
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var group dto.Group
+	if err := c.ShouldBindJSON(&group); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.crossSeason.PickItem(ctx, user, req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := h.userData.JoinGroup(ctx, user, group); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.Status(200)
+	c.JSON(200, gin.H{"message": "group joined"})
 }
 
 // InitRound — организатор открывает приём сетапов перед этапом.
-// TODO - rewrite can only be used in the start of the sim
 func (h *HttpHandler) InitRound(c *gin.Context) {
 	user, exist := h.getUser(c)
 	if !exist {
