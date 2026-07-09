@@ -46,8 +46,9 @@ const (
 )
 
 type Draft struct {
-	Pick  DraftItem `json:"pick"`
-	Order int       `json:"order"`
+	Pick   DraftItem       `json:"pick"`
+	ItemID int64           `json:"item_id"`
+	Engine *models.ICEName `json:"engine,omitempty"` // обязателен для DraftTeam
 }
 
 type Group struct {
