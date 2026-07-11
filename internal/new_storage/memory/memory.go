@@ -20,6 +20,7 @@ type Repo struct {
 	players    map[int64]map[int64]*models.Player // group -> userID -> player
 	pilots     map[int64]map[int64]*models.Pilot  // group -> pilotID -> pilot
 	teams      map[int64]map[int64]*models.Team   // group -> teamID -> team
+	cars       map[int64]map[int64]models.Car     // group -> teamID -> car
 	principals map[int64]models.TeamPrincipal     // principalID -> principal
 	engines    []models.Engine
 }
@@ -31,6 +32,7 @@ func New() *Repo {
 		players:    map[int64]map[int64]*models.Player{},
 		pilots:     map[int64]map[int64]*models.Pilot{},
 		teams:      map[int64]map[int64]*models.Team{},
+		cars:       map[int64]map[int64]models.Car{},
 		principals: map[int64]models.TeamPrincipal{},
 	}
 }
@@ -302,6 +304,62 @@ func (r *Repo) GetEngines(_ context.Context) ([]models.Engine, error) {
 	out := make([]models.Engine, len(r.engines))
 	copy(out, r.engines)
 	return out, nil
+}
+
+// --- tokens / cars / group (для ChooseSetup и смежной логики) ---
+
+func (r *Repo) GetTokens(_ context.Context, userID, groupID int64) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.player(groupID, userID)
+	if p == nil {
+		return 0, errors.New("player not found")
+	}
+	return p.Tokens, nil
+}
+
+func (r *Repo) UpdateTokens(_ context.Context, userID, groupID int64, tokens int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.player(groupID, userID)
+	if p == nil {
+		return errors.New("player not found")
+	}
+	p.Tokens = tokens
+	return nil
+}
+
+func (r *Repo) UpdateCar(_ context.Context, teamID, groupID int64, car models.Car) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cars[groupID] == nil {
+		r.cars[groupID] = map[int64]models.Car{}
+	}
+	r.cars[groupID][teamID] = car
+	return nil
+}
+
+func (r *Repo) GetCar(_ context.Context, teamID, groupID int64) (models.Car, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if g, ok := r.cars[groupID]; ok {
+		if c, ok := g[teamID]; ok {
+			return c, nil
+		}
+	}
+	return models.Car{}, errors.New("car not found")
+}
+
+func (r *Repo) GetUserGroup(_ context.Context, userID int64) (*int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for groupID, g := range r.players {
+		if _, ok := g[userID]; ok {
+			id := groupID
+			return &id, nil
+		}
+	}
+	return nil, nil
 }
 
 func (r *Repo) player(groupID, userID int64) *models.Player {
