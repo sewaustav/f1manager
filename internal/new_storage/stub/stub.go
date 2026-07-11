@@ -195,3 +195,20 @@ func (d *Dynamic) SetPilotOwner(ctx context.Context, pilotID, groupID int64, own
 func (d *Dynamic) SetTeamEngine(ctx context.Context, teamID, groupID int64, ice models.ICEName) error {
 	return ErrNotImplemented
 }
+
+// EngineRepo — заглушка engine.Repo для сборки сервера до появления Redis-реализации.
+type EngineRepo struct{}
+
+func NewEngineRepo() *EngineRepo { return &EngineRepo{} }
+
+func (e *EngineRepo) GetPilotTrack(ctx context.Context, groupID, pilotID, trackID int64) (models.PilotTrack, error) {
+	return models.PilotTrack{}, ErrNotImplemented
+}
+
+func (e *EngineRepo) UpdatePilot(ctx context.Context, groupID int64, pilot models.Pilot) error {
+	return ErrNotImplemented
+}
+
+func (e *EngineRepo) UpdatePilotTrack(ctx context.Context, groupID int64, pt models.PilotTrack) error {
+	return ErrNotImplemented
+}

@@ -53,7 +53,7 @@ func New(cfg config.Config) (*Server, error) {
 
 	// игровой граф
 	manager := connection.NewManager()
-	eng := engine.NewEngine(database.GetDB())
+	eng := engine.NewEngine(stub.NewEngineRepo())
 	svc := service.New(stub.NewStatic(), stub.NewDynamic(), eng, service.NewMemoryUpdateCache(), manager)
 	disp := dispatcher.New(svc, manager)
 	gameHandler := webhttp.NewHttpHandler(svc, svc, svc, svc, manager, disp)

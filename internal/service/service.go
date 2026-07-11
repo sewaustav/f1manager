@@ -112,7 +112,7 @@ func (s *Service) Simulate(ctx context.Context, groupID, stage int64) ([]models.
 		}
 	}
 
-	results := s.engine.SimulateWeekend(ctx, track, pilots, teams, cars, principals, driverPoints, teamPoints)
+	results := s.engine.SimulateWeekend(ctx, groupID, track, pilots, teams, cars, principals, driverPoints, teamPoints)
 
 	if err = s.dynamic.HandleRace(ctx, results, groupID); err != nil {
 		return nil, err

@@ -29,7 +29,7 @@ func main() {
 
 	store := sqlite_repo.NewSqliteF1Repo(db)
 
-	simEngine := engine.NewEngine(db)
+	simEngine := engine.NewEngine(sqlite_repo.NewEngineAdapter(store))
 	ui := cli.NewCLI(store, simEngine)
 
 	// Запуск игры
