@@ -10,44 +10,60 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAutoFillByDescendingRating(t *testing.T) {
+// Сценарий ревьюера: игрок берёт в свою команду (Ferrari, 100) двух пилотов,
+// чьи дефолтные гаражи — команды-боты (Aston 200, Williams 201). Дефолтные пилоты
+// Ferrari (Leclerc/Hamilton) остаются недобранными → освобождаются и перераспределяются
+// по дефициту (в боты, потерявшие пилотов) по убыванию рейтинга.
+func TestAutoFillReconciliation(t *testing.T) {
 	ctx := context.Background()
 	r := memory.New()
 	const g = int64(1)
 
-	// команда-игрок 100 (1 пилот уже есть) и бот 200 (пустой)
 	r.SeedPlayer(g, models.Player{ID: 1, Team: 100})
-	r.SeedTeam(g, models.Team{ID: 100})
-	r.SeedTeam(g, models.Team{ID: 200})
+	r.SeedTeam(g, models.Team{ID: 100}) // Ferrari (игрок)
+	r.SeedTeam(g, models.Team{ID: 200}) // Aston (бот)
+	r.SeedTeam(g, models.Team{ID: 201}) // Williams (бот)
 
 	own := int64(1)
-	gar := int64(100)
-	r.SeedPilot(g, models.Pilot{ID: 500, Rating: 88, Team: &own, Garage: &gar}) // у команды 100 уже 1
+	g100, g200, g201 := int64(100), int64(200), int64(201)
 
-	// свободные пилоты разного рейтинга
-	r.SeedPilot(g, models.Pilot{ID: 501, Rating: 99})
-	r.SeedPilot(g, models.Pilot{ID: 502, Rating: 70})
-	r.SeedPilot(g, models.Pilot{ID: 503, Rating: 85})
+	// дефолтные пилоты Ferrari — недобраны
+	r.SeedPilot(g, models.Pilot{ID: 600, Rating: 94, Garage: &g100}) // Leclerc
+	r.SeedPilot(g, models.Pilot{ID: 601, Rating: 95, Garage: &g100}) // Hamilton
+	// Alonso (дефолт Aston) и Sainz (дефолт Williams) — забраны игроком в Ferrari
+	r.SeedPilot(g, models.Pilot{ID: 602, Rating: 92, Team: &own, Garage: &g100}) // Alonso → 100
+	r.SeedPilot(g, models.Pilot{ID: 603, Rating: 90, Team: &own, Garage: &g100}) // Sainz → 100
+	// вторые пилоты ботов остаются на местах
+	r.SeedPilot(g, models.Pilot{ID: 604, Rating: 70, Garage: &g200})
+	r.SeedPilot(g, models.Pilot{ID: 605, Rating: 65, Garage: &g201})
 
 	svc := New(r, r, nil, nil, nil)
 	require.NoError(t, svc.AutoFillAfterDraft(ctx, g))
 
-	// у обеих команд должно стать по 2 пилота
+	// Ferrari укомплектована забранными пилотами
 	t100, _ := r.GetPilotsByTeam(ctx, 100, g)
-	t200, _ := r.GetPilotsByTeam(ctx, 200, g)
 	require.Len(t, t100, 2)
-	require.Len(t, t200, 2)
 
-	// не осталось свободных
+	// все команды по 2 пилота, свободных не осталось
+	t200, _ := r.GetPilotsByTeam(ctx, 200, g)
+	t201, _ := r.GetPilotsByTeam(ctx, 201, g)
+	require.Len(t, t200, 2)
+	require.Len(t, t201, 2)
 	free, _ := r.GetUnassignedPilots(ctx, g)
 	require.Empty(t, free)
 
-	// высший рейтинг (99) ушёл первым — команде 100 (ей нужен 1)
-	ids100 := map[int64]bool{}
-	for _, p := range t100 {
-		ids100[p.ID] = true
+	// освобождённые Leclerc/Hamilton перераспределены по убыванию рейтинга:
+	// первый по ID бот (200) получает высший рейтинг (601/Hamilton), затем 201 → 600.
+	has := func(pilots []models.Pilot, id int64) bool {
+		for _, p := range pilots {
+			if p.ID == id {
+				return true
+			}
+		}
+		return false
 	}
-	require.True(t, ids100[501], "пилот 501 (99) должен попасть в первую заполняемую команду")
+	require.True(t, has(t200, 601), "высший свободный рейтинг уходит первой команде с дефицитом")
+	require.True(t, has(t201, 600))
 }
 
 func TestSwapBotPilotsOnlyBots(t *testing.T) {

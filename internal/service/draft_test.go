@@ -113,6 +113,22 @@ func TestDraftLimitsAndAvailability(t *testing.T) {
 	_ = r
 }
 
+func TestPilotWithDefaultGarageIsDraftable(t *testing.T) {
+	ctx := context.Background()
+	svc, r := newDraftFixture(t)
+	require.NoError(t, svc.StartDraftEconomy(ctx, grp, []int64{1, 2}))
+
+	// пилот с дефолтным гаражом (команда-бот), но без владельца-игрока — доступен для драфта
+	defaultGarage := int64(200)
+	r.SeedPilot(grp, models.Pilot{ID: 1010, Rating: 88, Price: 10, Garage: &defaultGarage})
+
+	require.NoError(t, svc.ApplyDraftPick(ctx, 1, grp, dto.Draft{Pick: dto.DraftPilot, ItemID: 1010}))
+
+	p, _ := r.GetPilotByGroup(ctx, 1010, grp)
+	require.NotNil(t, p.Team)
+	require.Equal(t, int64(1), *p.Team)
+}
+
 func TestListGroupPlayers(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newDraftFixture(t)

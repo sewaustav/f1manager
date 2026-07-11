@@ -139,6 +139,16 @@ func (r *Repo) GetTeamsByGroup(_ context.Context, groupID int64) ([]models.Team,
 	return out, nil
 }
 
+func (r *Repo) GetPilotsByGroup(_ context.Context, groupID int64) ([]models.Pilot, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []models.Pilot
+	for _, p := range r.pilots[groupID] {
+		out = append(out, *p)
+	}
+	return out, nil
+}
+
 func (r *Repo) GetPilotByGroup(_ context.Context, pilotID, groupID int64) (models.Pilot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -167,7 +177,8 @@ func (r *Repo) GetUnassignedPilots(_ context.Context, groupID int64) ([]models.P
 	defer r.mu.Unlock()
 	var out []models.Pilot
 	for _, p := range r.pilots[groupID] {
-		if p.Team == nil && p.Garage == nil {
+		// Не распределён = нет владельца-игрока и нет гаража (0/nil).
+		if p.Team == nil && (p.Garage == nil || *p.Garage == 0) {
 			out = append(out, *p)
 		}
 	}

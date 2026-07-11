@@ -132,7 +132,9 @@ func (s *Service) applyPilotPick(ctx context.Context, userID, groupID int64, pla
 	if err != nil {
 		return err
 	}
-	if pilot.Team != nil || pilot.Garage != nil {
+	// Доступность = нет владельца-игрока (team_id). Дефолтный garage_id из
+	// pilots_initial не блокирует драфт — он лишь стартовая команда пилота.
+	if pilot.Team != nil {
 		return errors.New("пилот уже занят")
 	}
 
