@@ -112,7 +112,7 @@ func (s *Service) Simulate(ctx context.Context, groupID, stage int64) ([]models.
 		}
 	}
 
-	results := s.engine.SimulateWeekend(ctx, track, pilots, teams, cars, principals, driverPoints, teamPoints)
+	results := s.engine.SimulateWeekend(ctx, groupID, track, pilots, teams, cars, principals, driverPoints, teamPoints)
 
 	if err = s.dynamic.HandleRace(ctx, results, groupID); err != nil {
 		return nil, err
@@ -187,9 +187,9 @@ func (s *Service) MakeUpdate(ctx context.Context, userID int64, req dto.Updates)
 	}
 }
 
-// ChooseSetup — игрок выбирает настройки болида перед гонкой (токены).
-// Вызывается диспетчером; сама логика применения — в SetupDispatcher.
-// TODO - do not reset tokens
+// ChooseSetup — игрок распределяет токены на настройки болида перед гонкой.
+// Токены раздаются заново перед каждой гонкой, поэтому баланс НЕ уменьшается
+// после сетапа — распределение лишь применяется к болиду.
 func (s *Service) ChooseSetup(ctx context.Context, userID int64, setup dto.Setup) error {
 	groupID, err := s.getUserGroup(ctx, userID)
 	if err != nil {
@@ -222,12 +222,8 @@ func (s *Service) ChooseSetup(ctx context.Context, userID int64, setup dto.Setup
 		SettingsAngle: setup.SettingsAngle,
 	}
 
-	if err = s.dynamic.UpdateCar(ctx, player.Team, groupID, car); err != nil {
-		return err
-	}
-
-	remaining := tokens - total
-	return s.dynamic.UpdateTokens(ctx, userID, groupID, remaining)
+	// Токены не списываем: баланс сохраняется до следующей пред-гоночной раздачи.
+	return s.dynamic.UpdateCar(ctx, player.Team, groupID, car)
 }
 
 // MakeTokenSetup — применить настройки токенов на болид (cross-season, перед новым сезоном).

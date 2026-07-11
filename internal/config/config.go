@@ -11,8 +11,15 @@ import (
 type Config struct {
 	HTTPPort    string
 	DB          DBConfig
+	Redis       RedisConfig
 	JWT         JWTConfig
 	CORSOrigins []string
+}
+
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
 }
 
 type DBConfig struct {
@@ -34,6 +41,11 @@ type JWTConfig struct {
 
 func Load() (Config, error) {
 	dbPort, err := envInt("DB_PORT", 5432)
+	if err != nil {
+		return Config{}, err
+	}
+
+	redisDB, err := envInt("REDIS_DB", 0)
 	if err != nil {
 		return Config{}, err
 	}
@@ -64,6 +76,11 @@ func Load() (Config, error) {
 			Audience:       envStr("JWT_AUDIENCE", "f1manager"),
 			AccessTTL:      accessTTL,
 			RefreshTTL:     refreshTTL,
+		},
+		Redis: RedisConfig{
+			Addr:     envStr("REDIS_ADDR", "localhost:6379"),
+			Password: envStr("REDIS_PASSWORD", ""),
+			DB:       redisDB,
 		},
 		CORSOrigins: strings.Split(envStr("CORS_ORIGINS", "http://localhost:5173"), ","),
 	}

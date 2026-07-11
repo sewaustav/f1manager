@@ -2,10 +2,7 @@ package engine
 
 import (
 	"context"
-	"database/sql"
 	"f1/internal/models"
-	"f1/internal/storage"
-	"f1/internal/storage/sqlite_repo"
 	"math"
 	"math/rand"
 	"sort"
@@ -13,16 +10,14 @@ import (
 )
 
 type Engine struct {
-	db *sql.DB
-	r  *rand.Rand
-	repo storage.F1Repo
+	r    *rand.Rand
+	repo Repo
 }
 
-func NewEngine(db *sql.DB) *Engine {
+func NewEngine(repo Repo) *Engine {
 	return &Engine{
-		db:   db,
 		r:    rand.New(rand.NewSource(time.Now().UnixNano())),
-		repo: sqlite_repo.NewSqliteF1Repo(db),
+		repo: repo,
 	}
 }
 
@@ -101,7 +96,7 @@ func calcCarScore(car models.Car, track models.Track) float64 {
 }
 
 // Вычисление базовых модификаторов
-func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.Car, track models.Track, principal models.TeamPrincipal, isRain bool) (float64, float64) {
+func (e *Engine) calcModifiers(groupID int64, pilot models.Pilot, team models.Team, car models.Car, track models.Track, principal models.TeamPrincipal, isRain bool) (float64, float64) {
 	// 1. Штраф за углы настроек
 	synergyPenalty := 0.0
 	if pilot.SettingsAngle != car.SettingsAngle {
@@ -115,7 +110,7 @@ func (e *Engine) calcModifiers(pilot models.Pilot, team models.Team, car models.
 	}
 	
 	ctx := context.Background()
-	pilotTrack, err := e.repo.GetPilotTrack(ctx, pilot.ID, track.ID)
+	pilotTrack, err := e.repo.GetPilotTrack(ctx, groupID, pilot.ID, track.ID)
 	if err != nil {
 		return 0, 0
 	}
@@ -165,7 +160,7 @@ func (e *Engine) getVariance(p models.Pilot) float64 {
 	}
 }
 
-func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots []models.Pilot, teams map[int64]models.Team, cars map[int64]models.Car, principals map[int64]models.TeamPrincipal, pilotsStanding, teamStanding map[int64]int) []models.RaceResult {
+func (e *Engine) SimulateWeekend(ctx context.Context, groupID int64, track models.Track, pilots []models.Pilot, teams map[int64]models.Team, cars map[int64]models.Car, principals map[int64]models.TeamPrincipal, pilotsStanding, teamStanding map[int64]int) []models.RaceResult {
 	isRain := e.r.Intn(100) < track.RainPossibility
 	
 	type tempResult struct {
@@ -187,7 +182,7 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		c := cars[t.ID]
 		tp := principals[t.ID]
 		
-		bonus, trackLvl := e.calcModifiers(p, t, c, track, tp, isRain)
+		bonus, trackLvl := e.calcModifiers(groupID, p, t, c, track, tp, isRain)
 		settings := e.calcSetupBonus(p, t, c)
 		
 		// Квалификация
@@ -324,7 +319,7 @@ func (e *Engine) SimulateWeekend(ctx context.Context, track models.Track, pilots
 		}
 	}
 	
-	e.updateAfterRace(ctx, track, finalResults, pilots)
+	e.updateAfterRace(ctx, groupID, track, finalResults, pilots)
 	
 	return finalResults
 }

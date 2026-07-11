@@ -155,3 +155,60 @@ func (d *Dynamic) RegisterGroup(ctx context.Context, userID int64, name, passwor
 func (d *Dynamic) JoinGroup(ctx context.Context, userID int64, groupID int64, password string) error {
 	return ErrNotImplemented
 }
+
+func (d *Dynamic) GetPilotByGroup(ctx context.Context, pilotID, groupID int64) (models.Pilot, error) {
+	return models.Pilot{}, ErrNotImplemented
+}
+
+func (d *Dynamic) GetPlayerPilots(ctx context.Context, userID, groupID int64) ([]models.Pilot, error) {
+	return nil, ErrNotImplemented
+}
+
+func (d *Dynamic) GetUnassignedPilots(ctx context.Context, groupID int64) ([]models.Pilot, error) {
+	return nil, ErrNotImplemented
+}
+
+func (d *Dynamic) GetBotTeams(ctx context.Context, groupID int64) ([]models.Team, error) {
+	return nil, ErrNotImplemented
+}
+
+func (d *Dynamic) GetPilotsByTeam(ctx context.Context, teamID, groupID int64) ([]models.Pilot, error) {
+	return nil, ErrNotImplemented
+}
+
+func (d *Dynamic) SetPlayerTeam(ctx context.Context, userID, groupID, teamID int64) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) SetPlayerBudget(ctx context.Context, userID, groupID int64, budget int) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) SetPlayerPrincipal(ctx context.Context, userID, groupID, principalID int64) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) SetPilotOwner(ctx context.Context, pilotID, groupID int64, owner *int64, garage *int64) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) SetTeamEngine(ctx context.Context, teamID, groupID int64, ice models.ICEName) error {
+	return ErrNotImplemented
+}
+
+// EngineRepo — заглушка engine.Repo для сборки сервера до появления Redis-реализации.
+type EngineRepo struct{}
+
+func NewEngineRepo() *EngineRepo { return &EngineRepo{} }
+
+func (e *EngineRepo) GetPilotTrack(ctx context.Context, groupID, pilotID, trackID int64) (models.PilotTrack, error) {
+	return models.PilotTrack{}, ErrNotImplemented
+}
+
+func (e *EngineRepo) UpdatePilot(ctx context.Context, groupID int64, pilot models.Pilot) error {
+	return ErrNotImplemented
+}
+
+func (e *EngineRepo) UpdatePilotTrack(ctx context.Context, groupID int64, pt models.PilotTrack) error {
+	return ErrNotImplemented
+}

@@ -58,4 +58,16 @@ type DynamicRepo interface {
 	GetGroupSize(ctx context.Context, groupID int64) (int, error)
 	RegisterGroup(ctx context.Context, userID int64, name, password string) error
 	JoinGroup(ctx context.Context, userID int64, groupID int64, password string) error
+
+	// Драфт
+	GetPilotByGroup(ctx context.Context, pilotID, groupID int64) (models.Pilot, error)
+	GetPlayerPilots(ctx context.Context, userID, groupID int64) ([]models.Pilot, error)
+	GetUnassignedPilots(ctx context.Context, groupID int64) ([]models.Pilot, error)
+	GetBotTeams(ctx context.Context, groupID int64) ([]models.Team, error)
+	GetPilotsByTeam(ctx context.Context, teamID, groupID int64) ([]models.Pilot, error)
+	SetPlayerTeam(ctx context.Context, userID, groupID, teamID int64) error
+	SetPlayerBudget(ctx context.Context, userID, groupID int64, budget int) error
+	SetPlayerPrincipal(ctx context.Context, userID, groupID, principalID int64) error
+	SetPilotOwner(ctx context.Context, pilotID, groupID int64, owner *int64, garage *int64) error
+	SetTeamEngine(ctx context.Context, teamID, groupID int64, ice models.ICEName) error
 }

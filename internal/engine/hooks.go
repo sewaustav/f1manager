@@ -10,6 +10,7 @@ import (
 // updateAfterRace обновляет только уровень пилота на трассе.
 func (e *Engine) updateAfterRace(
 	ctx context.Context,
+	groupID int64,
 	track models.Track,
 	results []models.RaceResult,
 	pilots []models.Pilot,
@@ -41,13 +42,13 @@ func (e *Engine) updateAfterRace(
 			continue
 		}
 		
-		pt, err := e.repo.GetPilotTrack(ctx, pilot.ID, track.ID)
+		pt, err := e.repo.GetPilotTrack(ctx, groupID, pilot.ID, track.ID)
 		if err != nil {
 			fmt.Println("Error getting pilot track", err)
 			continue
 		}
 		pt.Level = clamp(pt.Level+trackDelta, 0, 20)
-		if err := e.repo.UpdatePilotTrack(ctx, pt); err != nil {
+		if err := e.repo.UpdatePilotTrack(ctx, groupID, pt); err != nil {
 			fmt.Println("Error updating pilot track", err)
 		}
 	}
@@ -157,7 +158,7 @@ type teamDuelResult struct {
 }
 
 // UpdateAfterSeason — хук после подсчёта всех очков.
-func (e *Engine) UpdateAfterSeason(ctx context.Context, standings SeasonStandings) {
+func (e *Engine) UpdateAfterSeason(ctx context.Context, groupID int64, standings SeasonStandings) {
 	if len(standings.DriverPoints) == 0 {
 		return
 	}
@@ -298,7 +299,7 @@ func (e *Engine) UpdateAfterSeason(ctx context.Context, standings SeasonStanding
 					if ptsDiff > 0 {
 						if duel.myBaseRating < duel.oppBaseRating-3 {
 							ratingDelta += 2
-							applyDelta(ctx, e, pilotByID[snapByID[pilot.ID].PilotID], -2)
+							applyDelta(ctx, groupID, e, pilotByID[snapByID[pilot.ID].PilotID], -2)
 						} else {
 							ratingDelta += 1
 						}
@@ -314,18 +315,18 @@ func (e *Engine) UpdateAfterSeason(ctx context.Context, standings SeasonStanding
 		}
 		
 		if ratingDelta != 0 {
-			applyDelta(ctx, e, pilot, ratingDelta)
+			applyDelta(ctx, groupID, e, pilot, ratingDelta)
 		}
 	}
 }
 
 // applyDelta применяет дельту рейтинга к пилоту и сохраняет в БД.
-func applyDelta(ctx context.Context, e *Engine, pilot models.Pilot, delta int) {
+func applyDelta(ctx context.Context, groupID int64, e *Engine, pilot models.Pilot, delta int) {
 	if delta == 0 {
 		return
 	}
 	pilot.Rating = clamp(pilot.Rating+delta, 0, 100)
-	_ = e.repo.UpdatePilot(ctx, pilot)
+	_ = e.repo.UpdatePilot(ctx, groupID, pilot)
 }
 
 func abs(v int) int {

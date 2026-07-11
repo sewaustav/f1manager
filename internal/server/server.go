@@ -14,7 +14,8 @@ import (
 	"f1/internal/config"
 	"f1/internal/db"
 	"f1/internal/engine"
-	"f1/internal/new_storage/stub"
+	"f1/internal/new_storage/pg"
+	redisrepo "f1/internal/new_storage/redis"
 	"f1/internal/service"
 	"f1/internal/web/connection"
 	"f1/internal/web/dispatcher"
@@ -22,11 +23,13 @@ import (
 	jwtmw "f1/pkg/middleware/jwt"
 
 	jwtlib "github.com/golang-jwt/jwt/v5"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 type Server struct {
 	httpServer *http.Server
 	database   *db.DataBase
+	redis      *goredis.Client
 }
 
 // New собирает весь граф зависимостей приложения.
@@ -51,14 +54,26 @@ func New(cfg config.Config) (*Server, error) {
 	authHandler := authhandler.New(authSvc)
 	middleware := jwtmw.New(publicKey, cfg.JWT.Issuer, cfg.JWT.Audience)
 
+	// хранилище: статика — Postgres, динамика — Redis (с групповой изоляцией).
+	rdb := goredis.NewClient(&goredis.Options{
+		Addr:     cfg.Redis.Addr,
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
+	static := pg.NewStatic(database.GetDB())
+	dyn := redisrepo.NewDynamic(rdb)
+
 	// игровой граф
 	manager := connection.NewManager()
-	eng := engine.NewEngine(database.GetDB())
-	svc := service.New(stub.NewStatic(), stub.NewDynamic(), eng, service.NewMemoryUpdateCache(), manager)
+	eng := engine.NewEngine(dyn) // Redis-репозиторий реализует engine.Repo
+	svc := service.New(static, dyn, eng, service.NewMemoryUpdateCache(), manager)
 	disp := dispatcher.New(svc, manager)
 	gameHandler := webhttp.NewHttpHandler(svc, svc, svc, svc, manager, disp)
 
-	router := setupRouter(cfg, authHandler, gameHandler, middleware)
+	draftDisp := dispatcher.NewDraft(svc, manager)
+	draftHandler := webhttp.NewDraftHandler(draftDisp, svc)
+
+	router := setupRouter(cfg, authHandler, draftHandler, gameHandler, middleware)
 
 	return &Server{
 		httpServer: &http.Server{
@@ -66,6 +81,7 @@ func New(cfg config.Config) (*Server, error) {
 			Handler: router,
 		},
 		database: database,
+		redis:    rdb,
 	}, nil
 }
 
@@ -88,6 +104,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	err := s.httpServer.Shutdown(shutdownCtx)
 	s.database.Close()
+	_ = s.redis.Close()
 	return err
 }
 
