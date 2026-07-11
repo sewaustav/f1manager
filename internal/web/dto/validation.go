@@ -51,6 +51,14 @@ type Draft struct {
 	Engine *models.ICEName `json:"engine,omitempty"` // обязателен для DraftTeam
 }
 
+// DraftBotSwap — тело запроса на обмен пилотами между командами-ботами.
+type DraftBotSwap struct {
+	TeamA  int64 `json:"team_a"`
+	TeamB  int64 `json:"team_b"`
+	PilotA int64 `json:"pilot_a"`
+	PilotB int64 `json:"pilot_b"`
+}
+
 type Group struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
@@ -11,16 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-type draftDispatcher interface {
-	StartDraft(ctx context.Context, groupID int64) error
-	SubmitPick(ctx context.Context, userID, groupID int64, pick dto.Draft) error
-}
-
-type draftService interface {
-	GetUserGroup(ctx context.Context, userID int64) (*int64, error)
-	SwapBotPilots(ctx context.Context, groupID, teamA, teamB, pilotA, pilotB int64) error
-}
 
 type DraftHandler struct {
 	dispatcher draftDispatcher
@@ -87,20 +76,13 @@ func (h *DraftHandler) Pick(c *gin.Context) {
 	}
 }
 
-type swapBotsReq struct {
-	TeamA  int64 `json:"team_a"`
-	TeamB  int64 `json:"team_b"`
-	PilotA int64 `json:"pilot_a"`
-	PilotB int64 `json:"pilot_b"`
-}
-
 func (h *DraftHandler) SwapBots(c *gin.Context) {
 	userID, ok := draftUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	var req swapBotsReq
+	var req dto.DraftBotSwap
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
