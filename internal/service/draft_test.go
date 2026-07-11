@@ -22,9 +22,10 @@ func newDraftFixture(t *testing.T) (*Service, *memory.Repo) {
 	r.SeedPlayer(grp, models.Player{ID: 1, Budget: draftVirtualBudget})
 	r.SeedPlayer(grp, models.Player{ID: 2, Budget: draftVirtualBudget})
 
-	// команда-клиент 100 и заводская 200
+	// команда-клиент 100, заводская 200, полу-заводская 300
 	r.SeedTeam(grp, models.Team{ID: 100, Budget: 150, IsManufacturer: models.Client, ICE: models.Mercedes})
 	r.SeedTeam(grp, models.Team{ID: 200, Budget: 150, IsManufacturer: models.Manufacture, ICE: models.Ferrari})
+	r.SeedTeam(grp, models.Team{ID: 300, Budget: 150, IsManufacturer: models.Semi, ICE: models.Ferrari})
 
 	// пилоты: рейтинги для проверки автозаполнения
 	r.SeedPilot(grp, models.Pilot{ID: 1000, Rating: 95, Price: 20, Sponsors: 5})
@@ -33,8 +34,9 @@ func newDraftFixture(t *testing.T) (*Service, *memory.Repo) {
 
 	r.SeedPrincipal(models.TeamPrincipal{ID: 5, Price: 10})
 
-	r.SeedEngine(models.Engine{Engine: models.Ferrari, Price: 30})
-	r.SeedEngine(models.Engine{Engine: models.Mercedes, Price: 30})
+	// Ferrari — топовый мотор (высший BaseLevel), Mercedes — не-топовый
+	r.SeedEngine(models.Engine{Engine: models.Ferrari, Price: 30, BaseLevel: 95})
+	r.SeedEngine(models.Engine{Engine: models.Mercedes, Price: 30, BaseLevel: 70})
 
 	svc := New(r, r, nil, nil, nil)
 	return svc, r
@@ -84,6 +86,43 @@ func TestFactoryEngineForced(t *testing.T) {
 	b, _ := r.GetBudget(ctx, 1, grp)
 	// newBudget = 150 - (110-110) - 30 = 120
 	require.Equal(t, 120, b)
+}
+
+func TestSemiOwnEngineNoSurcharge(t *testing.T) {
+	ctx := context.Background()
+	svc, r := newDraftFixture(t)
+	require.NoError(t, svc.StartDraftEconomy(ctx, grp, []int64{1, 2}))
+
+	// полу-заводская 300 (ICE Ferrari) оставляет свой мотор → базовая цена 30, без +10
+	require.NoError(t, svc.ApplyDraftPick(ctx, 1, grp, dto.Draft{Pick: dto.DraftTeam, ItemID: 300, Engine: ice(models.Ferrari)}))
+	b, _ := r.GetBudget(ctx, 1, grp)
+	require.Equal(t, 120, b) // 150 - 0 - 30
+}
+
+func TestSemiForeignEngineSurcharge(t *testing.T) {
+	ctx := context.Background()
+	svc, r := newDraftFixture(t)
+	require.NoError(t, svc.StartDraftEconomy(ctx, grp, []int64{1, 2}))
+
+	// полу-заводская 300 берёт чужой мотор Mercedes → 30 + 10
+	require.NoError(t, svc.ApplyDraftPick(ctx, 1, grp, dto.Draft{Pick: dto.DraftTeam, ItemID: 300, Engine: ice(models.Mercedes)}))
+	team, _ := r.GetTeamByGroup(ctx, 300, grp)
+	require.Equal(t, models.Mercedes, team.ICE)
+	b, _ := r.GetBudget(ctx, 1, grp)
+	require.Equal(t, 110, b) // 150 - 0 - 40
+}
+
+func TestClientNoEngineGetsDefaultChargedMax(t *testing.T) {
+	ctx := context.Background()
+	svc, r := newDraftFixture(t)
+	require.NoError(t, svc.StartDraftEconomy(ctx, grp, []int64{1, 2}))
+
+	// клиент 100 не выбрал мотор → дефолтный не-топовый (Mercedes), списание по максимуму 30
+	require.NoError(t, svc.ApplyDraftPick(ctx, 1, grp, dto.Draft{Pick: dto.DraftTeam, ItemID: 100}))
+	team, _ := r.GetTeamByGroup(ctx, 100, grp)
+	require.Equal(t, models.Mercedes, team.ICE) // не-топовый
+	b, _ := r.GetBudget(ctx, 1, grp)
+	require.Equal(t, 120, b) // 150 - 0 - 30
 }
 
 func TestDraftLimitsAndAvailability(t *testing.T) {

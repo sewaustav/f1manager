@@ -56,9 +56,6 @@ func (s *Service) applyTeamPick(ctx context.Context, userID, groupID int64, play
 	if player.Team != 0 {
 		return errors.New("команда уже выбрана")
 	}
-	if pick.Engine == nil {
-		return errors.New("для команды нужно указать мотор")
-	}
 
 	players, err := s.dynamic.GetPlayers(ctx, groupID)
 	if err != nil {
@@ -75,12 +72,7 @@ func (s *Service) applyTeamPick(ctx context.Context, userID, groupID int64, play
 		return err
 	}
 
-	ice := *pick.Engine
-	if team.IsManufacturer == models.Manufacture {
-		ice = team.ICE // заводу мотор принудительно свой
-	}
-
-	engineCost, err := s.engineCost(ctx, ice, team.IsManufacturer)
+	ice, engineCost, err := s.resolveEngine(ctx, team, pick.Engine)
 	if err != nil {
 		return err
 	}
@@ -192,19 +184,76 @@ func (s *Service) applyPrincipalPick(ctx context.Context, userID, groupID int64,
 	return s.dynamic.SetPlayerBudget(ctx, userID, groupID, currentBudget-principal.Price)
 }
 
-// engineCost — стоимость мотора: завод платит price, остальные price+10.
-func (s *Service) engineCost(ctx context.Context, ice models.ICEName, kind models.IsManufacturer) (int, error) {
+// clientDefaultEngineCost — списание с клиента, не выбравшего мотор (по максимуму).
+const clientDefaultEngineCost = 30
+
+// resolveEngine определяет мотор команды и его стоимость:
+//   - завод (Manufacture): всегда свой мотор по базовой цене (без +10);
+//   - полу-завод (Semi): свой мотор — базовая цена; чужой — базовая +10; без выбора — свой;
+//   - клиент (Client): выбранный мотор — базовая +10; без выбора — дефолтный не-топовый мотор
+//     со списанием по максимуму (clientDefaultEngineCost).
+func (s *Service) resolveEngine(ctx context.Context, team models.Team, chosen *models.ICEName) (models.ICEName, int, error) {
 	engines, err := s.static.GetEngines(ctx)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	for _, e := range engines {
-		if e.Engine == ice {
-			if kind == models.Manufacture {
-				return e.Price, nil
+	priceOf := func(ice models.ICEName) (int, bool) {
+		for _, e := range engines {
+			if e.Engine == ice {
+				return e.Price, true
 			}
-			return e.Price + 10, nil
+		}
+		return 0, false
+	}
+
+	switch team.IsManufacturer {
+	case models.Manufacture:
+		p, ok := priceOf(team.ICE)
+		if !ok {
+			return 0, 0, errors.New("мотор не найден")
+		}
+		return team.ICE, p, nil
+
+	case models.Semi:
+		ice := team.ICE
+		if chosen != nil {
+			ice = *chosen
+		}
+		p, ok := priceOf(ice)
+		if !ok {
+			return 0, 0, errors.New("мотор не найден")
+		}
+		if ice != team.ICE {
+			p += 10 // чужой мотор
+		}
+		return ice, p, nil
+
+	default: // Client
+		if chosen == nil {
+			ice, ok := nonTopEngine(engines)
+			if !ok {
+				return 0, 0, errors.New("нет доступных моторов")
+			}
+			return ice, clientDefaultEngineCost, nil
+		}
+		p, ok := priceOf(*chosen)
+		if !ok {
+			return 0, 0, errors.New("мотор не найден")
+		}
+		return *chosen, p + 10, nil
+	}
+}
+
+// nonTopEngine возвращает заведомо не-топовый мотор (самый слабый по BaseLevel).
+func nonTopEngine(engines []models.Engine) (models.ICEName, bool) {
+	if len(engines) == 0 {
+		return 0, false
+	}
+	weakest := engines[0]
+	for _, e := range engines {
+		if e.BaseLevel < weakest.BaseLevel {
+			weakest = e
 		}
 	}
-	return 0, errors.New("мотор не найден")
+	return weakest.Engine, true
 }
