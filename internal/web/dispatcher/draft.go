@@ -47,6 +47,14 @@ type draftFinishedMsg struct {
 	Type string `json:"type"`
 }
 
+// draftRetryMsg уходит игроку, чей пик отклонён (занято/лимит/бюджет) —
+// ход остаётся за ним, нужно повторить с другим выбором.
+type draftRetryMsg struct {
+	Type  string `json:"type"`
+	Round int    `json:"round"`
+	Error string `json:"error"`
+}
+
 type draftState struct {
 	mu       sync.Mutex
 	order    []int64
@@ -128,8 +136,15 @@ func (d *DraftDispatcher) SubmitPick(ctx context.Context, userID, groupID int64,
 		return ErrNotYourTurn
 	}
 	if err := d.service.ApplyDraftPick(ctx, userID, groupID, pick); err != nil {
+		// Ход остаётся за игроком — уведомляем его о необходимости повторить пик.
+		round := st.pos / (len(st.order) / draftRounds)
 		st.mu.Unlock()
-		return err // указатель не двигаем — игрок повторит
+		d.notifier.SendUser(userID, mustMarshal(draftRetryMsg{
+			Type:  "draft_retry",
+			Round: round,
+			Error: err.Error(),
+		}))
+		return err
 	}
 	st.pos++
 	finished := st.pos >= len(st.order)

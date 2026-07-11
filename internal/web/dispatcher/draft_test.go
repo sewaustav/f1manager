@@ -113,12 +113,18 @@ func TestSubmitPickBeforeStart(t *testing.T) {
 
 func TestApplyErrorDoesNotAdvance(t *testing.T) {
 	ctx := context.Background()
-	d, svc, _ := newDraftDispatcher([]int64{1, 2})
+	d, svc, nt := newDraftDispatcher([]int64{1, 2})
 	svc.applyErr = context.Canceled // любая ошибка применения
 
 	require.NoError(t, d.StartDraft(ctx, 1))
+	sentBefore := len(nt.sentTo)
+
 	err := d.SubmitPick(ctx, 1, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: 1})
 	require.Error(t, err)
+
+	// игрок 1 получил уведомление о повторе хода
+	require.Equal(t, int64(1), nt.sentTo[len(nt.sentTo)-1])
+	require.Greater(t, len(nt.sentTo), sentBefore)
 
 	// указатель не сдвинулся: всё ещё ход игрока 1
 	svc.applyErr = nil
