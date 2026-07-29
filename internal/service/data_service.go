@@ -2,14 +2,9 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"f1/internal/models"
 )
-
-// ErrNeedsGroupContext — метод требует groupID, которого нет в текущей сигнатуре Data-интерфейса.
-// Эти эндпоинты будут дополнены после проброса группы в HTTP-слой.
-var ErrNeedsGroupContext = errors.New("service: method needs group context")
 
 func (s *Service) GetPilotsService(ctx context.Context) ([]models.Pilot, error) {
 	return s.static.GetPilots(ctx)
@@ -49,12 +44,17 @@ func (s *Service) GetMyTeamService(ctx context.Context, userID int64) (models.My
 		return models.MyTeam{}, err
 	}
 
+	return s.buildMyTeam(ctx, groupID, player)
+}
+
+// buildMyTeam собирает MyTeam для одного игрока.
+func (s *Service) buildMyTeam(ctx context.Context, groupID int64, player models.Player) (models.MyTeam, error) {
 	team, err := s.dynamic.GetTeamByGroup(ctx, player.Team, groupID)
 	if err != nil {
 		return models.MyTeam{}, err
 	}
 
-	pilots, err := s.dynamic.GetPlayerPilots(ctx, userID, groupID)
+	pilots, err := s.dynamic.GetPlayerPilots(ctx, player.ID, groupID)
 	if err != nil {
 		return models.MyTeam{}, err
 	}
@@ -74,17 +74,41 @@ func (s *Service) GetMyTeamService(ctx context.Context, userID int64) (models.My
 	return mt, nil
 }
 
-// GetTeamsService — команды скоупятся по группе; без groupID в сигнатуре не реализуемо.
-func (s *Service) GetTeamsService(ctx context.Context) ([]models.Team, error) {
-	return nil, ErrNeedsGroupContext
+// GetTeamsService возвращает все команды группы игрока.
+func (s *Service) GetTeamsService(ctx context.Context, userID int64) ([]models.Team, error) {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.dynamic.GetTeamsByGroup(ctx, groupID)
 }
 
-// GetPlayersService — игроки скоупятся по группе; без groupID не реализуемо.
-func (s *Service) GetPlayersService(ctx context.Context) ([]models.Player, error) {
-	return nil, ErrNeedsGroupContext
+// GetPlayersService возвращает всех игроков группы.
+func (s *Service) GetPlayersService(ctx context.Context, userID int64) ([]models.Player, error) {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.dynamic.GetPlayers(ctx, groupID)
 }
 
-// GetPlayersTeamsService — составы скоупятся по группе; без groupID не реализуемо.
-func (s *Service) GetPlayersTeamsService(ctx context.Context) ([]models.MyTeam, error) {
-	return nil, ErrNeedsGroupContext
+// GetPlayersTeamsService возвращает составы всех игроков группы.
+func (s *Service) GetPlayersTeamsService(ctx context.Context, userID int64) ([]models.MyTeam, error) {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	players, err := s.dynamic.GetPlayers(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	squads := make([]models.MyTeam, 0, len(players))
+	for _, p := range players {
+		mt, err := s.buildMyTeam(ctx, groupID, p)
+		if err != nil {
+			return nil, err
+		}
+		squads = append(squads, mt)
+	}
+	return squads, nil
 }
