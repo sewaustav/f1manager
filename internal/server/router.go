@@ -13,6 +13,7 @@ import (
 func setupRouter(
 	cfg config.Config,
 	authHandler *authhandler.AuthHandler,
+	draftHandler *webhttp.DraftHandler,
 	h *webhttp.HttpHandler,
 	middleware *jwtmw.JWTAuthMiddleware,
 ) *gin.Engine {
@@ -30,6 +31,7 @@ func setupRouter(
 
 	// /auth/register, /auth/login, /auth/refresh — публичные; /auth/logout — под middleware.
 	authHandler.RegisterRoutes(v1, middleware)
+	draftHandler.RegisterRoutes(v1, middleware)
 
 	game := v1.Group("")
 	game.Use(middleware.Handler())
@@ -48,7 +50,6 @@ func setupRouter(
 		game.POST("/base", h.UpdateBase)
 		game.POST("/transfers/pilot", h.PilotTransfer)
 		game.POST("/transfers/principal", h.PrincipalTransfer)
-		game.POST("/draft/pick", h.PickItem)
 
 		// данные
 		game.GET("/pilots", h.GetPilots)

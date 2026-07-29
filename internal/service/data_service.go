@@ -2,37 +2,113 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"f1/internal/models"
 )
 
-var ErrNotImplemented = errors.New("service: not implemented")
-
 func (s *Service) GetPilotsService(ctx context.Context) ([]models.Pilot, error) {
 	return s.static.GetPilots(ctx)
-}
-
-func (s *Service) GetTeamsService(ctx context.Context) ([]models.Team, error) {
-	return nil, ErrNotImplemented
 }
 
 func (s *Service) GetPrincipalsService(ctx context.Context) ([]models.TeamPrincipal, error) {
 	return s.static.GetTeamPrincipals(ctx)
 }
 
+// GetTrackInfoService возвращает все трассы или конкретную по имени.
 func (s *Service) GetTrackInfoService(ctx context.Context, track string) ([]models.Track, error) {
-	return nil, ErrNotImplemented
+	tracks, err := s.static.GetTracks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if track == "" {
+		return tracks, nil
+	}
+	var out []models.Track
+	for _, t := range tracks {
+		if t.Name == track {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
+// GetMyTeamService собирает команду игрока: команда, два пилота, тим-принципал.
 func (s *Service) GetMyTeamService(ctx context.Context, userID int64) (models.MyTeam, error) {
-	return models.MyTeam{}, ErrNotImplemented
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return models.MyTeam{}, err
+	}
+
+	player, err := s.dynamic.GetPlayer(ctx, userID, groupID)
+	if err != nil {
+		return models.MyTeam{}, err
+	}
+
+	return s.buildMyTeam(ctx, groupID, player)
 }
 
-func (s *Service) GetPlayersService(ctx context.Context) ([]models.Player, error) {
-	return nil, ErrNotImplemented
+// buildMyTeam собирает MyTeam для одного игрока.
+func (s *Service) buildMyTeam(ctx context.Context, groupID int64, player models.Player) (models.MyTeam, error) {
+	team, err := s.dynamic.GetTeamByGroup(ctx, player.Team, groupID)
+	if err != nil {
+		return models.MyTeam{}, err
+	}
+
+	pilots, err := s.dynamic.GetPlayerPilots(ctx, player.ID, groupID)
+	if err != nil {
+		return models.MyTeam{}, err
+	}
+
+	mt := models.MyTeam{ID: player.ID, Team: team}
+	if len(pilots) > 0 {
+		mt.Pilot1 = pilots[0]
+	}
+	if len(pilots) > 1 {
+		mt.Pilot2 = pilots[1]
+	}
+	if player.TeamPrincipal != nil {
+		if pr, err := s.static.GetTeamPrincipal(ctx, *player.TeamPrincipal); err == nil {
+			mt.TeamPrincipal = pr
+		}
+	}
+	return mt, nil
 }
 
-func (s *Service) GetPlayersTeamsService(ctx context.Context) ([]models.MyTeam, error) {
-	return nil, ErrNotImplemented
+// GetTeamsService возвращает все команды группы игрока.
+func (s *Service) GetTeamsService(ctx context.Context, userID int64) ([]models.Team, error) {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.dynamic.GetTeamsByGroup(ctx, groupID)
+}
+
+// GetPlayersService возвращает всех игроков группы.
+func (s *Service) GetPlayersService(ctx context.Context, userID int64) ([]models.Player, error) {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.dynamic.GetPlayers(ctx, groupID)
+}
+
+// GetPlayersTeamsService возвращает составы всех игроков группы.
+func (s *Service) GetPlayersTeamsService(ctx context.Context, userID int64) ([]models.MyTeam, error) {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	players, err := s.dynamic.GetPlayers(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	squads := make([]models.MyTeam, 0, len(players))
+	for _, p := range players {
+		mt, err := s.buildMyTeam(ctx, groupID, p)
+		if err != nil {
+			return nil, err
+		}
+		squads = append(squads, mt)
+	}
+	return squads, nil
 }

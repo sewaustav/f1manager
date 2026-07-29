@@ -308,12 +308,12 @@ func (h *HttpHandler) GetPilots(c *gin.Context) {
 
 func (h *HttpHandler) GetTeams(c *gin.Context) {
 	ctx := c.Request.Context()
-	_, exist := h.getUser(c)
+	user, exist := h.getUser(c)
 	if !exist {
 		c.JSON(403, gin.H{"error": "user not found"})
 		return
 	}
-	teams, err := h.data.GetTeamsService(ctx)
+	teams, err := h.data.GetTeamsService(ctx, user)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -369,12 +369,12 @@ func (h *HttpHandler) GetMyTeam(c *gin.Context) {
 
 func (h *HttpHandler) GetPlayers(c *gin.Context) {
 	ctx := c.Request.Context()
-	_, exist := h.getUser(c)
+	user, exist := h.getUser(c)
 	if !exist {
 		c.JSON(403, gin.H{"error": "user not found"})
 		return
 	}
-	players, err := h.data.GetPlayersService(ctx)
+	players, err := h.data.GetPlayersService(ctx, user)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -384,12 +384,12 @@ func (h *HttpHandler) GetPlayers(c *gin.Context) {
 
 func (h *HttpHandler) GetPlayersSquad(c *gin.Context) {
 	ctx := c.Request.Context()
-	_, exist := h.getUser(c)
+	user, exist := h.getUser(c)
 	if !exist {
 		c.JSON(403, gin.H{"error": "user not found"})
 		return
 	}
-	squads, err := h.data.GetPlayersTeamsService(ctx)
+	squads, err := h.data.GetPlayersTeamsService(ctx, user)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return

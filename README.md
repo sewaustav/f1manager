@@ -233,9 +233,13 @@ openssl rsa -in keys/jwt_private.pem -pubout -out keys/jwt_public.pem
 
 Обязательные env: `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`.
 Опциональные (дефолты): `HTTP_PORT=8080`, `DB_HOST=localhost`, `DB_PORT=5432`,
-`DB_USER=postgres`, `DB_PASSWORD=`, `DB_NAME=f1`, `JWT_ISSUER=f1manager`,
+`DB_USER=postgres`, `DB_PASSWORD=`, `DB_NAME=f1`, `REDIS_ADDR=localhost:6379`,
+`REDIS_PASSWORD=`, `REDIS_DB=0`, `JWT_ISSUER=f1manager`,
 `JWT_AUDIENCE=f1manager`, `ACCESS_TTL=6h`, `REFRESH_TTL=720h`,
 `CORS_ORIGINS=http://localhost:5173`.
+
+Хранилище: статические данные (пилоты, трассы, моторы, принципалы) — в PostgreSQL,
+динамическое состояние игры — в Redis с изоляцией по группам (`g:{groupID}:...`).
 
 Access-токен живёт 6 часов, refresh — 30 дней с ротацией при каждом обновлении;
 logout отзывает все refresh-сессии пользователя.

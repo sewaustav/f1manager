@@ -279,7 +279,7 @@ func (c *CLI) runSimulation(ctx context.Context) {
 			}
 		}
 		
-		results := c.engine.SimulateWeekend(ctx, track, pilots, teams, cars, principals, driverPoints, teamPoints)
+		results := c.engine.SimulateWeekend(ctx, 0, track, pilots, teams, cars, principals, driverPoints, teamPoints)
 		
 		fmt.Printf("%-4s | %-20s | %-15s | %-5s | %-5s | %-6s\n", "Поз", "Пилот", "Команда", "Квала", "Гонка", "Очки")
 		for _, res := range results {
@@ -315,7 +315,7 @@ func (c *CLI) runSimulation(ctx context.Context) {
 	}
 	
 	// Передаем результаты, используя финальное состояние пилотов и snapshot'ов
-	c.engine.UpdateAfterSeason(ctx, engine.SeasonStandings{
+	c.engine.UpdateAfterSeason(ctx, 0, engine.SeasonStandings{
 		DriverPoints: driverPoints,
 		TeamPoints:   teamPoints,
 		Pilots:       lastPilots,
