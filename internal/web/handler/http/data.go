@@ -13,4 +13,6 @@ type Data interface {
 	GetMyTeamService(ctx context.Context, userID int64) (models.MyTeam, error)
 	GetPlayersService(ctx context.Context, userID int64) ([]models.Player, error)
 	GetPlayersTeamsService(ctx context.Context, userID int64) ([]models.MyTeam, error)
+	GetEnginesService(ctx context.Context) ([]models.Engine, error)
+	GetBudgetService(ctx context.Context, userID, groupID int64) (int, int, error)
 }
