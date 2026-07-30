@@ -397,6 +397,40 @@ func (h *HttpHandler) GetPlayersSquad(c *gin.Context) {
 	c.JSON(200, squads)
 }
 
+func (h *HttpHandler) GetEngines(c *gin.Context) {
+	ctx := c.Request.Context()
+	if _, exist := h.getUser(c); !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	engines, err := h.data.GetEnginesService(ctx)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, engines)
+}
+
+func (h *HttpHandler) GetBudget(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	groupID, err := h.userData.GetUserGroup(ctx, user)
+	if err != nil || groupID == nil {
+		c.JSON(400, gin.H{"error": "group not found"})
+		return
+	}
+	budget, tokens, err := h.data.GetBudgetService(ctx, user, *groupID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"budget": budget, "tokens": tokens})
+}
+
 // --- Users ---
 
 func (h *HttpHandler) RegisterGroup(c *gin.Context) {

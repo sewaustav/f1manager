@@ -112,3 +112,20 @@ func (s *Service) GetPlayersTeamsService(ctx context.Context, userID int64) ([]m
 	}
 	return squads, nil
 }
+
+func (s *Service) GetEnginesService(ctx context.Context) ([]models.Engine, error) {
+	return s.static.GetEngines(ctx)
+}
+
+// GetBudgetService returns (budget, tokens) for the player in the group.
+func (s *Service) GetBudgetService(ctx context.Context, userID, groupID int64) (int, int, error) {
+	budget, err := s.dynamic.GetBudget(ctx, userID, groupID)
+	if err != nil {
+		return 0, 0, err
+	}
+	player, err := s.dynamic.GetPlayer(ctx, userID, groupID)
+	if err != nil {
+		return 0, 0, err
+	}
+	return budget, player.Tokens, nil
+}
