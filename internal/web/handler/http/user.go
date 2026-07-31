@@ -16,4 +16,5 @@ type User interface {
 type Manager interface {
 	Register(userID, groupID int64, conn *ws.Conn) *connection.Session
 	GroupSize(groupID int64) int
+	BroadcastGroup(groupID int64, msg []byte)
 }
