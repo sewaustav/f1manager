@@ -357,6 +357,36 @@ func (d *Dynamic) ExecutePrincipalTransfer(ctx context.Context, principalID, fro
 
 // --- cross-season ---
 
+// Fire убирает пилота (who=="pilot") или тим-принципала (who=="principal") у игрока.
+// Для пилота цена/спонсоры известны динамике (хранятся в самом пилоте) — рефанд
+// зачисляется здесь. Для принципала цена статическая, поэтому рефанд выполняется
+// на уровне Service.Fire после резолва цены через StaticRepo.
+func (d *Dynamic) Fire(ctx context.Context, userID, groupID int64, who string, id int64) error {
+	switch who {
+	case "pilot":
+		pilot, err := d.GetPilotByGroup(ctx, id, groupID)
+		if err != nil {
+			return err
+		}
+		if err := d.SetPilotOwner(ctx, id, groupID, nil, nil); err != nil {
+			return err
+		}
+		return d.UpdateBudget(ctx, userID, groupID, pilot.Price-pilot.Sponsors)
+	case "principal":
+		player, err := d.GetPlayer(ctx, userID, groupID)
+		if err != nil {
+			return err
+		}
+		if player.TeamPrincipal == nil {
+			return fmt.Errorf("player has no principal assigned")
+		}
+		player.TeamPrincipal = nil
+		return d.UpdatePlayer(ctx, userID, groupID, player)
+	default:
+		return fmt.Errorf("unknown who: %s", who)
+	}
+}
+
 func (d *Dynamic) ResetTokensAndBudget(ctx context.Context, groupID int64) error {
 	players, err := d.GetPlayers(ctx, groupID)
 	if err != nil {

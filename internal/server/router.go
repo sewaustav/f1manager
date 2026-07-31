@@ -50,6 +50,8 @@ func setupRouter(
 		game.POST("/base", h.UpdateBase)
 		game.POST("/transfers/pilot", h.PilotTransfer)
 		game.POST("/transfers/principal", h.PrincipalTransfer)
+		game.POST("/fire", h.Fire)
+		game.POST("/ready", h.Ready)
 
 		// данные
 		game.GET("/pilots", h.GetPilots)

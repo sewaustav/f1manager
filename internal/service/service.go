@@ -342,6 +342,34 @@ func (s *Service) PrincipalTransfer(ctx context.Context, userID int64, req dto.P
 	return s.dynamic.UpdateBudget(ctx, userID, groupID, principal.Price)
 }
 
+// Fire увольняет пилота или тим-принципала игрока и возвращает деньги в бюджет.
+// Для пилота (price-sponsors) зачисляет DynamicRepo.Fire напрямую — цена пилота
+// известна динамике. Для принципала цена статическая, поэтому Service резолвит
+// её через StaticRepo и зачисляет рефанд отдельным UpdateBudget уже после
+// того, как DynamicRepo.Fire очистил player.TeamPrincipal.
+func (s *Service) Fire(ctx context.Context, userID int64, req dto.Fire) error {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	switch req.Who {
+	case "pilot":
+		return s.dynamic.Fire(ctx, userID, groupID, req.Who, req.ID)
+	case "principal":
+		principal, err := s.static.GetTeamPrincipal(ctx, req.ID)
+		if err != nil {
+			return err
+		}
+		if err := s.dynamic.Fire(ctx, userID, groupID, req.Who, req.ID); err != nil {
+			return err
+		}
+		return s.dynamic.UpdateBudget(ctx, userID, groupID, principal.Price)
+	default:
+		return fmt.Errorf("unknown who: %s", req.Who)
+	}
+}
+
 // ResetSeason — сброс после сезона (токены/бюджет).
 // TODO - FIX reset tockens by team place
 func (s *Service) ResetSeason(ctx context.Context, groupID int64) error {
