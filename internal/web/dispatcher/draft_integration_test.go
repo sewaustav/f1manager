@@ -54,7 +54,7 @@ func TestFullDraftCycle(t *testing.T) {
 	r.SeedEngine(models.Engine{Engine: models.Mercedes, Price: 30})
 
 	svc := service.New(r, r, nil, nil, nil)
-	d := dispatcher.NewDraft(svc, nopNotifier{})
+	d := dispatcher.NewDraft(svc, nopNotifier{}, nil)
 	d.SetShuffle(func([]int64) {}) // детерминизм: base = [1,2]
 
 	require.NoError(t, d.StartDraft(ctx, g))

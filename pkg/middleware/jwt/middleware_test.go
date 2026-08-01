@@ -58,6 +58,13 @@ func TestMiddleware(t *testing.T) {
 		return w
 	}
 
+	doWithToken := func(token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/protected?token="+token, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
 	t.Run("valid token", func(t *testing.T) {
 		w := do("Bearer " + signToken(t, key, "42", "f1", "f1", time.Hour))
 		require.Equal(t, 200, w.Code)
@@ -80,5 +87,13 @@ func TestMiddleware(t *testing.T) {
 	})
 	t.Run("non-numeric sub", func(t *testing.T) {
 		require.Equal(t, 401, do("Bearer "+signToken(t, key, "abc", "f1", "f1", time.Hour)).Code)
+	})
+	t.Run("valid token query param, no header", func(t *testing.T) {
+		w := doWithToken(signToken(t, key, "42", "f1", "f1", time.Hour))
+		require.Equal(t, 200, w.Code)
+		require.Contains(t, w.Body.String(), `"user_id":"42"`)
+	})
+	t.Run("invalid token query param, no header", func(t *testing.T) {
+		require.Equal(t, 401, doWithToken("not-a-valid-jwt").Code)
 	})
 }

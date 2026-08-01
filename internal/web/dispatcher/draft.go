@@ -55,14 +55,16 @@ type DraftDispatcher struct {
 	service  DraftService
 	notifier DraftNotifier
 	shuffle  func([]int64)
+	phase    *PhaseTracker
 }
 
-func NewDraft(service DraftService, notifier DraftNotifier) *DraftDispatcher {
+func NewDraft(service DraftService, notifier DraftNotifier, phase *PhaseTracker) *DraftDispatcher {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return &DraftDispatcher{
 		groups:   make(map[int64]*draftState),
 		service:  service,
 		notifier: notifier,
+		phase:    phase,
 		shuffle: func(s []int64) {
 			r.Shuffle(len(s), func(i, j int) { s[i], s[j] = s[j], s[i] })
 		},
@@ -97,6 +99,10 @@ func (d *DraftDispatcher) StartDraft(ctx context.Context, groupID int64) error {
 	d.mu.Lock()
 	d.groups[groupID] = st
 	d.mu.Unlock()
+
+	if d.phase != nil {
+		d.phase.Set(groupID, PhaseDraft, 0)
+	}
 
 	nextUser, round := st.order[0], 0
 	d.notifier.SendUser(nextUser, mustMarshal(draftTurnMsg{Type: "draft_turn", Round: round}))
@@ -160,6 +166,9 @@ func (d *DraftDispatcher) SubmitPick(ctx context.Context, userID, groupID int64,
 
 		if err := d.service.AutoFillAfterDraft(ctx, groupID); err != nil {
 			return err
+		}
+		if d.phase != nil {
+			d.phase.Set(groupID, PhaseTokenSetup, 0)
 		}
 		d.notifier.BroadcastGroup(groupID, mustMarshal(draftFinishedMsg{Type: "draft_finished"}))
 		return nil
