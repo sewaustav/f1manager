@@ -69,7 +69,7 @@ func (n *fakeNotifier) BroadcastGroup(_ int64, msg []byte) {
 func newDraftDispatcher(players []int64) (*DraftDispatcher, *fakeDraftService, *fakeNotifier) {
 	svc := &fakeDraftService{players: players}
 	nt := &fakeNotifier{}
-	d := NewDraft(svc, nt)
+	d := NewDraft(svc, nt, nil)
 	d.shuffle = func([]int64) {} // детерминизм: без перемешивания
 	return d, svc, nt
 }
@@ -109,6 +109,31 @@ func TestSubmitPickBeforeStart(t *testing.T) {
 	d, _, _ := newDraftDispatcher([]int64{1})
 	err := d.SubmitPick(ctx, 1, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: 1})
 	require.ErrorIs(t, err, ErrDraftInactive)
+}
+
+func TestDraftDispatcher_PhaseTransitions(t *testing.T) {
+	ctx := context.Background()
+	svc := &fakeDraftService{players: []int64{1, 2}}
+	nt := &fakeNotifier{}
+	phase := NewPhaseTracker()
+	d := NewDraft(svc, nt, phase)
+	d.shuffle = func([]int64) {}
+
+	require.NoError(t, d.StartDraft(ctx, 1))
+	got, stage, ok := phase.Get(1)
+	require.True(t, ok)
+	require.Equal(t, PhaseDraft, got)
+	require.Equal(t, int64(0), stage)
+
+	order := []int64{1, 2, 2, 1, 1, 2, 2, 1}
+	for i, uid := range order {
+		require.NoError(t, d.SubmitPick(ctx, uid, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: int64(i)}))
+	}
+
+	got, stage, ok = phase.Get(1)
+	require.True(t, ok)
+	require.Equal(t, PhaseTokenSetup, got)
+	require.Equal(t, int64(0), stage)
 }
 
 func TestApplyErrorDoesNotAdvance(t *testing.T) {

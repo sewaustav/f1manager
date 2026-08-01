@@ -16,6 +16,11 @@ type ReadyDispatcher interface {
 	Ready(ctx context.Context, groupID, userID int64, totalPlayers int) error
 }
 
+// PhaseReader — доступ на чтение к текущей фазе/этапу группы (in-memory).
+type PhaseReader interface {
+	Get(groupID int64) (phase string, stage int64, ok bool)
+}
+
 type HttpHandler struct {
 	sim         Sim
 	crossSeason CrossSeason
@@ -24,6 +29,7 @@ type HttpHandler struct {
 	manager     Manager
 	dispatcher  SetupDispatcher
 	ready       ReadyDispatcher
+	phase       PhaseReader
 }
 
 func NewHttpHandler(
@@ -34,6 +40,7 @@ func NewHttpHandler(
 	manager Manager,
 	dispatcher SetupDispatcher,
 	ready ReadyDispatcher,
+	phase PhaseReader,
 ) *HttpHandler {
 	return &HttpHandler{
 		sim:         sim,
@@ -43,6 +50,7 @@ func NewHttpHandler(
 		manager:     manager,
 		dispatcher:  dispatcher,
 		ready:       ready,
+		phase:       phase,
 	}
 }
 
@@ -566,4 +574,31 @@ func (h *HttpHandler) Ready(c *gin.Context) {
 	}
 
 	c.Status(200)
+}
+
+// GetSeasonState — текущая фаза/этап сезона группы игрока и статус текущего раунда.
+func (h *HttpHandler) GetSeasonState(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	groupID, err := h.userData.GetUserGroup(ctx, user)
+	if err != nil || groupID == nil {
+		c.JSON(400, gin.H{"error": "group not found"})
+		return
+	}
+	phase, stage, _ := h.phase.Get(*groupID)
+	submitted, total, ok := h.dispatcher.RoundState(*groupID)
+	if !ok {
+		submitted = []int64{}
+		total = h.manager.GroupSize(*groupID)
+	}
+	c.JSON(200, gin.H{
+		"phase":            phase,
+		"stage":            stage,
+		"submitted_setups": submitted,
+		"total_players":    total,
+	})
 }

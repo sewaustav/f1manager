@@ -27,10 +27,11 @@ type ReadyTracker struct {
 	groups   map[int64]*readyState
 	reset    ResetService
 	notifier Notifier
+	phase    *PhaseTracker
 }
 
-func NewReady(reset ResetService, notifier Notifier) *ReadyTracker {
-	return &ReadyTracker{groups: make(map[int64]*readyState), reset: reset, notifier: notifier}
+func NewReady(reset ResetService, notifier Notifier, phase *PhaseTracker) *ReadyTracker {
+	return &ReadyTracker{groups: make(map[int64]*readyState), reset: reset, notifier: notifier, phase: phase}
 }
 
 // Ready регистрирует готовность игрока. totalPlayers — размер группы на момент вызова.
@@ -61,6 +62,9 @@ func (r *ReadyTracker) Ready(ctx context.Context, groupID, userID int64, totalPl
 
 	if err := r.reset.ResetSeason(ctx, groupID); err != nil {
 		return err
+	}
+	if r.phase != nil {
+		r.phase.Set(groupID, PhaseTokenSetup, 0)
 	}
 	r.notifier.BroadcastGroup(groupID, mustMarshal(seasonStartedMsg{Type: "season_started"}))
 	return nil

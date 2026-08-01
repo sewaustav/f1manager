@@ -64,7 +64,7 @@ func setupEnginesBudget(t *testing.T, d Data, u User) (*gin.Engine, *rsa.Private
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	h := NewHttpHandler(nil, nil, d, u, nil, nil, nil)
+	h := NewHttpHandler(nil, nil, d, u, nil, nil, nil, nil)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")

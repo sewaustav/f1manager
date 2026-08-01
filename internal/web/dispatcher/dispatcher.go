@@ -37,18 +37,20 @@ type groupState struct {
 // Dispatcher ждёт сетапы от всех игроков группы.
 // Когда все прислали — запускает симуляцию и рассылает WS-уведомление.
 type Dispatcher struct {
-	mu      sync.RWMutex
-	groups  map[int64]*groupState
+	mu     sync.RWMutex
+	groups map[int64]*groupState
 
 	service  RaceService
 	notifier Notifier
+	phase    *PhaseTracker
 }
 
-func New(service RaceService, notifier Notifier) *Dispatcher {
+func New(service RaceService, notifier Notifier, phase *PhaseTracker) *Dispatcher {
 	return &Dispatcher{
 		groups:   make(map[int64]*groupState),
 		service:  service,
 		notifier: notifier,
+		phase:    phase,
 	}
 }
 
@@ -63,6 +65,28 @@ func (d *Dispatcher) InitRound(groupID, stage int64, totalPlayers int) {
 		totalPlayers: totalPlayers,
 		received:     make(map[int64]struct{}),
 	}
+
+	if d.phase != nil {
+		d.phase.Set(groupID, PhaseRacing, stage)
+	}
+}
+
+// RoundState returns the submitted user ids and total players for the group's
+// active round, and whether a round is currently open.
+func (d *Dispatcher) RoundState(groupID int64) (submitted []int64, total int, ok bool) {
+	d.mu.RLock()
+	st, exists := d.groups[groupID]
+	d.mu.RUnlock()
+	if !exists {
+		return nil, 0, false
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	ids := make([]int64, 0, len(st.received))
+	for id := range st.received {
+		ids = append(ids, id)
+	}
+	return ids, st.totalPlayers, true
 }
 
 // Submit принимает сетап от игрока.

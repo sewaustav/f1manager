@@ -67,11 +67,12 @@ func New(cfg config.Config) (*Server, error) {
 	manager := connection.NewManager()
 	eng := engine.NewEngine(dyn) // Redis-репозиторий реализует engine.Repo
 	svc := service.New(static, dyn, eng, service.NewMemoryUpdateCache(), manager)
-	disp := dispatcher.New(svc, manager)
-	ready := dispatcher.NewReady(svc, manager)
-	gameHandler := webhttp.NewHttpHandler(svc, svc, svc, svc, manager, disp, ready)
+	phase := dispatcher.NewPhaseTracker()
+	disp := dispatcher.New(svc, manager, phase)
+	ready := dispatcher.NewReady(svc, manager, phase)
+	gameHandler := webhttp.NewHttpHandler(svc, svc, svc, svc, manager, disp, ready, phase)
 
-	draftDisp := dispatcher.NewDraft(svc, manager)
+	draftDisp := dispatcher.NewDraft(svc, manager, phase)
 	draftHandler := webhttp.NewDraftHandler(draftDisp, svc)
 
 	router := setupRouter(cfg, authHandler, draftHandler, gameHandler, middleware)
