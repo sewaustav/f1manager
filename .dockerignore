@@ -1,0 +1,13 @@
+.git
+.gitignore
+*.md
+keys/
+*.pem
+*.db
+f1_simulation.db
+bin/
+dist/
+tmp/
+*.log
+.idea/
+.vscode/
