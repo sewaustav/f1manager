@@ -53,6 +53,10 @@ type DynamicRepo interface {
 	ResetTokensAndBudget(ctx context.Context, groupID int64) error
 	UpgradeTeam(ctx context.Context, groupID int64, team models.Team) error
 
+	// Fire убирает пилота (who=="pilot") или тим-принципала (who=="principal") у игрока
+	// и возвращает деньги в бюджет (пилот: +price-sponsors; принципал: +price).
+	Fire(ctx context.Context, userID, groupID int64, who string, id int64) error
+
 	// Группы/игроки
 	GetUserGroup(ctx context.Context, userID int64) (*int64, error)
 	GetGroupSize(ctx context.Context, groupID int64) (int, error)

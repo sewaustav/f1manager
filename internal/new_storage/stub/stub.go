@@ -140,6 +140,10 @@ func (d *Dynamic) UpgradeTeam(ctx context.Context, groupID int64, team models.Te
 	return ErrNotImplemented
 }
 
+func (d *Dynamic) Fire(ctx context.Context, userID, groupID int64, who string, id int64) error {
+	return ErrNotImplemented
+}
+
 func (d *Dynamic) GetUserGroup(ctx context.Context, userID int64) (*int64, error) {
 	return nil, ErrNotImplemented
 }

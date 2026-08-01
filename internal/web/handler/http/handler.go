@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"f1/internal/web/dto"
 	ws "f1/internal/web/handler/websocket"
 	"net/http"
@@ -10,6 +11,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// ReadyDispatcher собирает готовность игроков перед стартом нового сезона.
+type ReadyDispatcher interface {
+	Ready(ctx context.Context, groupID, userID int64, totalPlayers int) error
+}
+
 type HttpHandler struct {
 	sim         Sim
 	crossSeason CrossSeason
@@ -17,6 +23,7 @@ type HttpHandler struct {
 	userData    User
 	manager     Manager
 	dispatcher  SetupDispatcher
+	ready       ReadyDispatcher
 }
 
 func NewHttpHandler(
@@ -26,6 +33,7 @@ func NewHttpHandler(
 	userData User,
 	manager Manager,
 	dispatcher SetupDispatcher,
+	ready ReadyDispatcher,
 ) *HttpHandler {
 	return &HttpHandler{
 		sim:         sim,
@@ -34,6 +42,7 @@ func NewHttpHandler(
 		userData:    userData,
 		manager:     manager,
 		dispatcher:  dispatcher,
+		ready:       ready,
 	}
 }
 
@@ -236,6 +245,30 @@ func (h *HttpHandler) PilotTransfer(c *gin.Context) {
 	}
 
 	if err := h.crossSeason.PilotTransfer(ctx, user, req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(200)
+}
+
+// Fire — увольнение пилота или тим-принципала игрока.
+func (h *HttpHandler) Fire(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+
+	var req dto.Fire
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.crossSeason.Fire(ctx, user, req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -504,6 +537,33 @@ func (h *HttpHandler) InitRound(c *gin.Context) {
 
 	totalPlayers := h.manager.GroupSize(*groupID)
 	h.dispatcher.InitRound(*groupID, stage, totalPlayers)
+
+	c.Status(200)
+}
+
+// Ready — игрок подтверждает готовность к старту нового сезона.
+// Когда готовы все участники группы, сервер сбрасывает сезон и рассылает
+// WS-уведомление season_started.
+func (h *HttpHandler) Ready(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+
+	groupID, err := h.userData.GetUserGroup(ctx, user)
+	if err != nil || groupID == nil {
+		c.JSON(400, gin.H{"error": "group not found"})
+		return
+	}
+
+	total := h.manager.GroupSize(*groupID)
+	if err := h.ready.Ready(ctx, *groupID, user, total); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.Status(200)
 }
