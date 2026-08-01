@@ -63,6 +63,7 @@ func setupRouter(
 		game.GET("/players/squads", h.GetPlayersSquad)
 		game.GET("/engines", h.GetEngines)
 		game.GET("/budget", h.GetBudget)
+		game.GET("/season/state", h.GetSeasonState)
 
 		// группы
 		game.POST("/groups", h.RegisterGroup)

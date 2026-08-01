@@ -57,7 +57,8 @@ func TestReadyTracker_AllReady(t *testing.T) {
 	ctx := context.Background()
 	reset := &fakeReadyResetService{}
 	notifier := &fakeReadyNotifier{}
-	tracker := NewReady(reset, notifier)
+	phase := NewPhaseTracker()
+	tracker := NewReady(reset, notifier, phase)
 
 	const groupID = int64(1)
 	const total = 2
@@ -76,13 +77,18 @@ func TestReadyTracker_AllReady(t *testing.T) {
 	require.Equal(t, 1, notifier.broadcastCount())
 	require.JSONEq(t, `{"type":"season_started"}`, string(notifier.broadcast[0].msg))
 	require.Equal(t, groupID, notifier.broadcast[0].groupID)
+
+	gotPhase, gotStage, ok := phase.Get(groupID)
+	require.True(t, ok)
+	require.Equal(t, PhaseTokenSetup, gotPhase)
+	require.Equal(t, int64(0), gotStage)
 }
 
 func TestReadyTracker_SameUserTwiceDoesNotDoubleCount(t *testing.T) {
 	ctx := context.Background()
 	reset := &fakeReadyResetService{}
 	notifier := &fakeReadyNotifier{}
-	tracker := NewReady(reset, notifier)
+	tracker := NewReady(reset, notifier, nil)
 
 	const groupID = int64(1)
 	const total = 2
@@ -100,7 +106,7 @@ func TestReadyTracker_LaunchesOnlyOnce(t *testing.T) {
 	ctx := context.Background()
 	reset := &fakeReadyResetService{}
 	notifier := &fakeReadyNotifier{}
-	tracker := NewReady(reset, notifier)
+	tracker := NewReady(reset, notifier, nil)
 
 	const groupID = int64(1)
 	const total = 1
