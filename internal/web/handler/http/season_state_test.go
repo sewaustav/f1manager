@@ -47,7 +47,7 @@ func setupSeasonState(t *testing.T, groupID *int64, phase *dispatcher.PhaseTrack
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	h := NewHttpHandler(nil, nil, nil, &fakeUser{group: groupID}, &fakeSeasonStateManager{size: groupSize}, disp, nil, phase, nil)
+	h := NewHttpHandler(nil, nil, nil, &fakeUser{group: groupID}, &fakeSeasonStateManager{size: groupSize}, disp, nil, phase, nil, nil)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")
