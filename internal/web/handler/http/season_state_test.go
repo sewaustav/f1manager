@@ -29,6 +29,7 @@ func (f *fakeSetupDispatcher) InitRound(int64, int64, int)                      
 func (f *fakeSetupDispatcher) RoundState(int64) ([]int64, int, bool) {
 	return f.submitted, f.total, f.ok
 }
+func (f *fakeSetupDispatcher) CancelGroup(int64) {}
 
 // fakeSeasonStateManager implements the Manager interface, exposing only a
 // fixed GroupSize (used by GetSeasonState's fallback when no round is open).
@@ -46,7 +47,7 @@ func setupSeasonState(t *testing.T, groupID *int64, phase *dispatcher.PhaseTrack
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	h := NewHttpHandler(nil, nil, nil, &fakeUser{group: groupID}, &fakeSeasonStateManager{size: groupSize}, disp, nil, phase)
+	h := NewHttpHandler(nil, nil, nil, &fakeUser{group: groupID}, &fakeSeasonStateManager{size: groupSize}, disp, nil, phase, nil)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")

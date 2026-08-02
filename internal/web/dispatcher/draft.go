@@ -109,6 +109,34 @@ func (d *DraftDispatcher) StartDraft(ctx context.Context, groupID int64) error {
 	return nil
 }
 
+// DraftTurnState recovers "whose turn is it" for a group's active draft —
+// needed because draft_turn is delivered via a single, targeted, one-shot WS
+// message (notifier.SendUser): if the target user's WS wasn't connected at
+// that exact instant (reconnect race, backgrounded tab, network hiccup), the
+// message is silently dropped forever with no retry, deadlocking the whole
+// draft since no one else can ever get a turn. The client polls this on
+// load/reconnect to recover instead of relying solely on that message.
+// ok=false means there is no active draft for this group (not started yet,
+// or already finished).
+func (d *DraftDispatcher) DraftTurnState(groupID, userID int64) (round int, isMyTurn bool, finished bool, ok bool) {
+	d.mu.RLock()
+	st, exists := d.groups[groupID]
+	d.mu.RUnlock()
+	if !exists {
+		return 0, false, false, false
+	}
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.finished || st.pos >= len(st.order) {
+		return 0, false, true, true
+	}
+	n := len(st.order) / draftRounds
+	round = st.pos / n
+	isMyTurn = st.order[st.pos] == userID
+	return round, isMyTurn, false, true
+}
+
 // SubmitPick применяет пик текущего игрока и продвигает очередь.
 func (d *DraftDispatcher) SubmitPick(ctx context.Context, userID, groupID int64, pick dto.Draft) error {
 	d.mu.RLock()
@@ -176,6 +204,15 @@ func (d *DraftDispatcher) SubmitPick(ctx context.Context, userID, groupID int64,
 
 	d.notifier.SendUser(nextUser, mustMarshal(draftTurnMsg{Type: "draft_turn", Round: round}))
 	return nil
+}
+
+// CancelGroup drops any in-progress draft for the group with no further
+// notification — used by POST /groups/reset ("end the game early"). A no-op
+// if the group has no active draft.
+func (d *DraftDispatcher) CancelGroup(groupID int64) {
+	d.mu.Lock()
+	delete(d.groups, groupID)
+	d.mu.Unlock()
 }
 
 func leftRotate(order []int64, k int) []int64 {

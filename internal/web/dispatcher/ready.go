@@ -34,6 +34,15 @@ func NewReady(reset ResetService, notifier Notifier, phase *PhaseTracker) *Ready
 	return &ReadyTracker{groups: make(map[int64]*readyState), reset: reset, notifier: notifier, phase: phase}
 }
 
+// CancelGroup drops any pending readiness state for the group with no
+// further notification — used by POST /groups/reset ("end the game early").
+// A no-op if the group has no pending readiness state.
+func (r *ReadyTracker) CancelGroup(groupID int64) {
+	r.mu.Lock()
+	delete(r.groups, groupID)
+	r.mu.Unlock()
+}
+
 // Ready регистрирует готовность игрока. totalPlayers — размер группы на момент вызова.
 func (r *ReadyTracker) Ready(ctx context.Context, groupID, userID int64, totalPlayers int) error {
 	r.mu.Lock()

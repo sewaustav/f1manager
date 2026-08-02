@@ -70,9 +70,9 @@ func New(cfg config.Config) (*Server, error) {
 	phase := dispatcher.NewPhaseTracker()
 	disp := dispatcher.New(svc, manager, phase)
 	ready := dispatcher.NewReady(svc, manager, phase)
-	gameHandler := webhttp.NewHttpHandler(svc, svc, svc, svc, manager, disp, ready, phase)
-
 	draftDisp := dispatcher.NewDraft(svc, manager, phase)
+	gameHandler := webhttp.NewHttpHandler(svc, svc, svc, svc, manager, disp, ready, phase, draftDisp)
+
 	draftHandler := webhttp.NewDraftHandler(draftDisp, svc)
 
 	router := setupRouter(cfg, authHandler, draftHandler, gameHandler, middleware)

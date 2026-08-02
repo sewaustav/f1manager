@@ -68,6 +68,7 @@ func setupRouter(
 		// группы
 		game.POST("/groups", h.RegisterGroup)
 		game.POST("/groups/join", h.JoinGroup)
+		game.POST("/groups/reset", h.ResetGroup)
 	}
 
 	return r

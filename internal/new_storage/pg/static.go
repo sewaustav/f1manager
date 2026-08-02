@@ -246,6 +246,39 @@ func (s *Static) GetEngine(ctx context.Context, id int64) (models.Engine, error)
 	return e, nil
 }
 
+const baseTeamColumns = `id, name, car_lvl, ice, base_lvl, engineer, tube, sim, update_rtg, is_manufacturer, budget, car_settings`
+
+// GetBaseTeams возвращает шаблоны команд для сидирования нового мира группы
+// (см. DynamicRepo.SaveTeam). base_team не хранит tokens — команда начинает
+// с нуля токенов, как и в старом sqlite-сидере.
+func (s *Static) GetBaseTeams(ctx context.Context) ([]models.Team, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+baseTeamColumns+` FROM base_team`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var teams []models.Team
+	for rows.Next() {
+		var t models.Team
+		var ice, isManufacturer int
+		if err := rows.Scan(
+			&t.ID, &t.Name, &t.CarLevel, &ice, &t.BaseLevel, &t.Engineer,
+			&t.TubeLevel, &t.SimLevel, &t.UpdateRating, &isManufacturer,
+			&t.Budget, &t.CarSettings,
+		); err != nil {
+			return nil, err
+		}
+		t.ICE = models.ICEName(ice)
+		t.IsManufacturer = models.IsManufacturer(isManufacturer)
+		teams = append(teams, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return teams, nil
+}
+
 func (s *Static) GetEngines(ctx context.Context) ([]models.Engine, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, manufacturer, price, power FROM engine`)

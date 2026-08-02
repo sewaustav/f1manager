@@ -54,6 +54,10 @@ func (s *Static) GetEngines(ctx context.Context) ([]models.Engine, error) {
 	return nil, ErrNotImplemented
 }
 
+func (s *Static) GetBaseTeams(ctx context.Context) ([]models.Team, error) {
+	return nil, ErrNotImplemented
+}
+
 type Dynamic struct{}
 
 func NewDynamic() *Dynamic { return &Dynamic{} }
@@ -197,6 +201,18 @@ func (d *Dynamic) SetPilotOwner(ctx context.Context, pilotID, groupID int64, own
 }
 
 func (d *Dynamic) SetTeamEngine(ctx context.Context, teamID, groupID int64, ice models.ICEName) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) SavePlayer(ctx context.Context, groupID int64, p models.Player) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) SaveTeam(ctx context.Context, groupID int64, t models.Team) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) SavePilot(ctx context.Context, groupID int64, p models.Pilot) error {
 	return ErrNotImplemented
 }
 

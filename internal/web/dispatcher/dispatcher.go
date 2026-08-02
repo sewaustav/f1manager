@@ -54,6 +54,15 @@ func New(service RaceService, notifier Notifier, phase *PhaseTracker) *Dispatche
 	}
 }
 
+// CancelGroup drops any open setup round for the group with no further
+// notification — used by POST /groups/reset ("end the game early"). A no-op
+// if the group has no open round.
+func (d *Dispatcher) CancelGroup(groupID int64) {
+	d.mu.Lock()
+	delete(d.groups, groupID)
+	d.mu.Unlock()
+}
+
 // InitRound инициализирует новый раунд для группы перед этапом.
 // Вызывается организатором через HTTP перед открытием приёма сетапов.
 func (d *Dispatcher) InitRound(groupID, stage int64, totalPlayers int) {

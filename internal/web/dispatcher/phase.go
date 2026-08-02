@@ -38,3 +38,11 @@ func (p *PhaseTracker) Get(groupID int64) (string, int64, bool) {
 	e, ok := p.groups[groupID]
 	return e.phase, e.stage, ok
 }
+
+// Clear removes the group's tracked phase entirely (Get then reports it as
+// untracked, matching a fresh group) — used by POST /groups/reset.
+func (p *PhaseTracker) Clear(groupID int64) {
+	p.mu.Lock()
+	delete(p.groups, groupID)
+	p.mu.Unlock()
+}

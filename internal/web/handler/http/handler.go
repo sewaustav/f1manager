@@ -14,11 +14,22 @@ import (
 // ReadyDispatcher собирает готовность игроков перед стартом нового сезона.
 type ReadyDispatcher interface {
 	Ready(ctx context.Context, groupID, userID int64, totalPlayers int) error
+
+	// CancelGroup drops any pending readiness state for the group — see
+	// POST /groups/reset ("end the game early").
+	CancelGroup(groupID int64)
 }
 
-// PhaseReader — доступ на чтение к текущей фазе/этапу группы (in-memory).
+// PhaseReader — доступ к текущей фазе/этапу группы (in-memory). Clear
+// используется POST /groups/reset ("end the game early").
 type PhaseReader interface {
 	Get(groupID int64) (phase string, stage int64, ok bool)
+	Clear(groupID int64)
+}
+
+// DraftCanceller — сброс активного драфта группы (POST /groups/reset).
+type DraftCanceller interface {
+	CancelGroup(groupID int64)
 }
 
 type HttpHandler struct {
@@ -30,6 +41,7 @@ type HttpHandler struct {
 	dispatcher  SetupDispatcher
 	ready       ReadyDispatcher
 	phase       PhaseReader
+	draft       DraftCanceller
 }
 
 func NewHttpHandler(
@@ -41,6 +53,7 @@ func NewHttpHandler(
 	dispatcher SetupDispatcher,
 	ready ReadyDispatcher,
 	phase PhaseReader,
+	draft DraftCanceller,
 ) *HttpHandler {
 	return &HttpHandler{
 		sim:         sim,
@@ -51,6 +64,7 @@ func NewHttpHandler(
 		dispatcher:  dispatcher,
 		ready:       ready,
 		phase:       phase,
+		draft:       draft,
 	}
 }
 
@@ -518,6 +532,42 @@ func (h *HttpHandler) JoinGroup(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"message": "group joined"})
+}
+
+// ResetGroup wipes the caller's group back to a fresh pre-draft lobby state —
+// "end the game early". Organizer-only: by RegisterGroup's deterministic
+// scheme a group's id equals its creator's own userID, so comparing the
+// caller against their own group id doubles as the organizer check.
+func (h *HttpHandler) ResetGroup(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+
+	groupID, err := h.userData.GetUserGroup(ctx, user)
+	if err != nil || groupID == nil {
+		c.JSON(400, gin.H{"error": "group not found"})
+		return
+	}
+	if user != *groupID {
+		c.JSON(403, gin.H{"error": "only the group's organizer can reset it"})
+		return
+	}
+
+	if err := h.userData.ResetGroup(ctx, *groupID); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.dispatcher.CancelGroup(*groupID)
+	h.draft.CancelGroup(*groupID)
+	h.ready.CancelGroup(*groupID)
+	h.phase.Clear(*groupID)
+
+	c.Status(200)
 }
 
 // InitRound — организатор открывает приём сетапов перед этапом.

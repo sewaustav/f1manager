@@ -19,6 +19,10 @@ type StaticRepo interface {
 
 	GetEngine(ctx context.Context, id int64) (models.Engine, error)
 	GetEngines(ctx context.Context) ([]models.Engine, error)
+
+	// GetBaseTeams возвращает шаблоны команд (base_team) для сидирования
+	// нового мира группы — см. DynamicRepo.SaveTeam.
+	GetBaseTeams(ctx context.Context) ([]models.Team, error)
 }
 
 // DynamicRepo содержит данные, которые изменяются в ходе игры.
@@ -74,4 +78,13 @@ type DynamicRepo interface {
 	SetPlayerPrincipal(ctx context.Context, userID, groupID, principalID int64) error
 	SetPilotOwner(ctx context.Context, pilotID, groupID int64, owner *int64, garage *int64) error
 	SetTeamEngine(ctx context.Context, teamID, groupID int64, ice models.ICEName) error
+
+	// Сидирование / сброс — заполняют или перезаполняют мир группы копиями
+	// статических шаблонов (используется при создании и при полном сбросе
+	// группы). SavePlayer полностью перезаписывает игрока (нужен для сброса
+	// до чистого состояния — отдельные Set* не обнуляют указатели вроде
+	// TeamPrincipal до true nil).
+	SavePlayer(ctx context.Context, groupID int64, p models.Player) error
+	SaveTeam(ctx context.Context, groupID int64, t models.Team) error
+	SavePilot(ctx context.Context, groupID int64, p models.Pilot) error
 }
