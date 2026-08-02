@@ -6,7 +6,7 @@ import (
 )
 
 type Data interface {
-	GetPilotsService(ctx context.Context) ([]models.Pilot, error)
+	GetPilotsService(ctx context.Context, userID int64) ([]models.Pilot, error)
 	GetTeamsService(ctx context.Context, userID int64) ([]models.Team, error)
 	GetPrincipalsService(ctx context.Context) ([]models.TeamPrincipal, error)
 	GetTrackInfoService(ctx context.Context, track string) ([]models.Track, error)

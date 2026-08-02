@@ -66,6 +66,32 @@ func TestAutoFillReconciliation(t *testing.T) {
 	require.True(t, has(t201, 600))
 }
 
+// Tokens are normally granted by ResetSeason before each season — but the
+// very first token-setup happens right after the draft, which never goes
+// through ResetSeason, so every player was stuck at 0 tokens with no way to
+// do their token-setup (all sliders effectively locked at 0/0).
+func TestAutoFillGrantsInitialTokens(t *testing.T) {
+	ctx := context.Background()
+	r := memory.New()
+	const g = int64(1)
+
+	r.SeedPlayer(g, models.Player{ID: 1, Team: 100})
+	r.SeedPlayer(g, models.Player{ID: 2, Team: 200})
+	r.SeedTeam(g, models.Team{ID: 100})
+	r.SeedTeam(g, models.Team{ID: 200})
+
+	svc := New(r, r, nil, nil, nil)
+	require.NoError(t, svc.AutoFillAfterDraft(ctx, g))
+
+	p1, err := r.GetPlayer(ctx, 1, g)
+	require.NoError(t, err)
+	require.Equal(t, initialTokenPool, p1.Tokens)
+
+	p2, err := r.GetPlayer(ctx, 2, g)
+	require.NoError(t, err)
+	require.Equal(t, initialTokenPool, p2.Tokens)
+}
+
 func TestSwapBotPilotsOnlyBots(t *testing.T) {
 	ctx := context.Background()
 	r := memory.New()

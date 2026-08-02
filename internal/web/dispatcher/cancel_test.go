@@ -18,12 +18,12 @@ func TestDraftDispatcher_CancelGroup(t *testing.T) {
 	d, _, _ := newDraftDispatcher([]int64{1, 2})
 	require.NoError(t, d.StartDraft(ctx, 1))
 
-	_, _, _, ok := d.DraftTurnState(1, 1)
+	_, _, _, _, ok := d.DraftTurnState(1, 1)
 	require.True(t, ok, "draft is active before cancel")
 
 	d.CancelGroup(1)
 
-	_, _, _, ok = d.DraftTurnState(1, 1)
+	_, _, _, _, ok = d.DraftTurnState(1, 1)
 	require.False(t, ok, "draft state is gone after cancel")
 
 	// cancelling an untracked/already-cancelled group is a harmless no-op

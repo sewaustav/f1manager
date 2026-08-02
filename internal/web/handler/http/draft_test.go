@@ -26,6 +26,7 @@ type fakeDraftDispatcher struct {
 
 	turnRound    int
 	turnIsMine   bool
+	turnCurrent  int64
 	turnFinished bool
 	turnOK       bool
 }
@@ -38,8 +39,8 @@ func (f *fakeDraftDispatcher) SubmitPick(_ context.Context, _, _ int64, pick dto
 	f.lastPick = pick
 	return f.pickErr
 }
-func (f *fakeDraftDispatcher) DraftTurnState(_, _ int64) (int, bool, bool, bool) {
-	return f.turnRound, f.turnIsMine, f.turnFinished, f.turnOK
+func (f *fakeDraftDispatcher) DraftTurnState(_, _ int64) (int, bool, int64, bool, bool) {
+	return f.turnRound, f.turnIsMine, f.turnCurrent, f.turnFinished, f.turnOK
 }
 
 type fakeDraftService struct {
@@ -134,11 +135,11 @@ func TestDraftPickStatuses(t *testing.T) {
 // is without relying on the one-shot draft_turn WS message, which is silently
 // dropped if the target wasn't connected at the instant it was sent.
 func TestDraftGetState_ActiveAndMyTurn(t *testing.T) {
-	d := &fakeDraftDispatcher{turnRound: 2, turnIsMine: true, turnOK: true}
+	d := &fakeDraftDispatcher{turnRound: 2, turnIsMine: true, turnCurrent: 1, turnOK: true}
 	r, key := setupDraft(t, d, &fakeDraftService{group: 7})
 	w := doReq(r, http.MethodGet, "/api/v1/draft/state", "", token(t, key, "1"))
 	require.Equal(t, 200, w.Code)
-	require.JSONEq(t, `{"active":true,"round":2,"is_my_turn":true,"finished":false}`, w.Body.String())
+	require.JSONEq(t, `{"active":true,"round":2,"is_my_turn":true,"finished":false,"current_user_id":1}`, w.Body.String())
 }
 
 func TestDraftGetState_NotActive(t *testing.T) {
@@ -146,7 +147,7 @@ func TestDraftGetState_NotActive(t *testing.T) {
 	r, key := setupDraft(t, d, &fakeDraftService{group: 7})
 	w := doReq(r, http.MethodGet, "/api/v1/draft/state", "", token(t, key, "1"))
 	require.Equal(t, 200, w.Code)
-	require.JSONEq(t, `{"active":false,"round":0,"is_my_turn":false,"finished":false}`, w.Body.String())
+	require.JSONEq(t, `{"active":false,"round":0,"is_my_turn":false,"finished":false,"current_user_id":0}`, w.Body.String())
 }
 
 func TestDraftGetState_RequiresAuth(t *testing.T) {

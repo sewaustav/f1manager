@@ -141,6 +141,17 @@ func (r *Repo) SavePilot(_ context.Context, groupID int64, p models.Pilot) error
 
 // --- dynamic reads ---
 
+func (r *Repo) UpdatePlayer(_ context.Context, _, groupID int64, p models.Player) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.players[groupID] == nil {
+		r.players[groupID] = map[int64]*models.Player{}
+	}
+	cp := p
+	r.players[groupID][p.ID] = &cp
+	return nil
+}
+
 func (r *Repo) GetPlayer(_ context.Context, userID, groupID int64) (models.Player, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

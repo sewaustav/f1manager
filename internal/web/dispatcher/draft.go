@@ -17,9 +17,12 @@ var (
 	ErrDraftInactive = errors.New("draft not active")
 )
 
+// draftTurnMsg is broadcast to the whole group (not just the next picker) so
+// every client can show whose turn it is, not just their own.
 type draftTurnMsg struct {
-	Type  string `json:"type"`
-	Round int    `json:"round"`
+	Type   string `json:"type"`
+	Round  int    `json:"round"`
+	UserID int64  `json:"user_id"`
 }
 
 type draftPickMadeMsg struct {
@@ -105,7 +108,7 @@ func (d *DraftDispatcher) StartDraft(ctx context.Context, groupID int64) error {
 	}
 
 	nextUser, round := st.order[0], 0
-	d.notifier.SendUser(nextUser, mustMarshal(draftTurnMsg{Type: "draft_turn", Round: round}))
+	d.notifier.BroadcastGroup(groupID, mustMarshal(draftTurnMsg{Type: "draft_turn", Round: round, UserID: nextUser}))
 	return nil
 }
 
@@ -118,23 +121,24 @@ func (d *DraftDispatcher) StartDraft(ctx context.Context, groupID int64) error {
 // load/reconnect to recover instead of relying solely on that message.
 // ok=false means there is no active draft for this group (not started yet,
 // or already finished).
-func (d *DraftDispatcher) DraftTurnState(groupID, userID int64) (round int, isMyTurn bool, finished bool, ok bool) {
+func (d *DraftDispatcher) DraftTurnState(groupID, userID int64) (round int, isMyTurn bool, currentUserID int64, finished bool, ok bool) {
 	d.mu.RLock()
 	st, exists := d.groups[groupID]
 	d.mu.RUnlock()
 	if !exists {
-		return 0, false, false, false
+		return 0, false, 0, false, false
 	}
 
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if st.finished || st.pos >= len(st.order) {
-		return 0, false, true, true
+		return 0, false, 0, true, true
 	}
 	n := len(st.order) / draftRounds
 	round = st.pos / n
-	isMyTurn = st.order[st.pos] == userID
-	return round, isMyTurn, false, true
+	currentUserID = st.order[st.pos]
+	isMyTurn = currentUserID == userID
+	return round, isMyTurn, currentUserID, false, true
 }
 
 // SubmitPick применяет пик текущего игрока и продвигает очередь.
@@ -188,10 +192,11 @@ func (d *DraftDispatcher) SubmitPick(ctx context.Context, userID, groupID int64,
 	}))
 
 	if finished {
-		d.mu.Lock()
-		delete(d.groups, groupID)
-		d.mu.Unlock()
-
+		// Deliberately not deleted from d.groups: DraftTurnState needs to keep
+		// answering finished=true (not indistinguishable from "never
+		// started") for clients that poll it after missing the broadcast
+		// below. CancelGroup (POST /groups/reset) is the only thing that
+		// clears it.
 		if err := d.service.AutoFillAfterDraft(ctx, groupID); err != nil {
 			return err
 		}
@@ -202,7 +207,7 @@ func (d *DraftDispatcher) SubmitPick(ctx context.Context, userID, groupID int64,
 		return nil
 	}
 
-	d.notifier.SendUser(nextUser, mustMarshal(draftTurnMsg{Type: "draft_turn", Round: round}))
+	d.notifier.BroadcastGroup(groupID, mustMarshal(draftTurnMsg{Type: "draft_turn", Round: round, UserID: nextUser}))
 	return nil
 }
 

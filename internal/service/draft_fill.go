@@ -8,12 +8,20 @@ import (
 	"f1/internal/models"
 )
 
+// initialTokenPool — токены, выдаваемые игроку на самый первый token-setup
+// сразу после драфта. Тот же номинал, что ResetTokensAndBudget выдаёт перед
+// каждым последующим сезоном.
+const initialTokenPool = 120
+
 // AutoFillAfterDraft приводит гаражи в порядок после драфта:
 //  1. недобранные пилоты, чей дефолтный гараж — команда, доставшаяся игроку,
 //     освобождаются (garage=0), т.к. игрок мог взять в эту команду других пилотов;
 //  2. недобранные пилоты команд-ботов сохраняют дефолтный гараж из pilots_initial;
 //  3. образовавшийся дефицит (<2 пилота) закрывается свободными пилотами по убыванию
-//     рейтинга — сначала команды игроков, затем боты.
+//     рейтинга — сначала команды игроков, затем боты;
+//  4. каждому игроку выдаётся стартовый пул токенов для token-setup — иначе
+//     он остаётся 0, так как обычно токены выдаёт ResetSeason, а этот драфт
+//     ещё ни разу не проходил через него.
 func (s *Service) AutoFillAfterDraft(ctx context.Context, groupID int64) error {
 	players, err := s.dynamic.GetPlayers(ctx, groupID)
 	if err != nil {
@@ -23,6 +31,10 @@ func (s *Service) AutoFillAfterDraft(ctx context.Context, groupID int64) error {
 	for _, p := range players {
 		if p.Team != 0 {
 			playerTeams[p.Team] = true
+		}
+		p.Tokens = initialTokenPool
+		if err := s.dynamic.UpdatePlayer(ctx, p.ID, groupID, p); err != nil {
+			return err
 		}
 	}
 

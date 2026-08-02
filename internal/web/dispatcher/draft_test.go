@@ -82,7 +82,8 @@ func TestDraftTurnOrderAndCompletion(t *testing.T) {
 	// порядок ходов: [1,2, 2,1, 1,2, 2,1]
 	order := []int64{1, 2, 2, 1, 1, 2, 2, 1}
 
-	require.Equal(t, int64(1), nt.sentTo[0], "первый ход — игрок 1")
+	require.Len(t, nt.broadcast, 1, "первый ход рассылается всей группе, а не только адресату")
+	require.JSONEq(t, `{"type":"draft_turn","round":0,"user_id":1}`, string(nt.broadcast[0]))
 
 	for i, uid := range order {
 		// чужой ход отклоняется
@@ -112,37 +113,41 @@ func TestDraftTurnState(t *testing.T) {
 	ctx := context.Background()
 	d, _, _ := newDraftDispatcher([]int64{1, 2})
 
-	_, _, _, ok := d.DraftTurnState(1, 1)
+	_, _, _, _, ok := d.DraftTurnState(1, 1)
 	require.False(t, ok, "no active draft yet")
 
 	require.NoError(t, d.StartDraft(ctx, 1))
 
-	round, isMyTurn, finished, ok := d.DraftTurnState(1, 1)
+	round, isMyTurn, currentUserID, finished, ok := d.DraftTurnState(1, 1)
 	require.True(t, ok)
 	require.False(t, finished)
 	require.Equal(t, 0, round)
 	require.True(t, isMyTurn, "player 1 goes first with no shuffle")
+	require.Equal(t, int64(1), currentUserID)
 
-	round, isMyTurn, finished, ok = d.DraftTurnState(1, 2)
+	round, isMyTurn, currentUserID, finished, ok = d.DraftTurnState(1, 2)
 	require.True(t, ok)
 	require.False(t, finished)
 	require.Equal(t, 0, round)
 	require.False(t, isMyTurn, "not player 2's turn yet")
+	require.Equal(t, int64(1), currentUserID, "player 2 can still see whose turn it is")
 
 	// advance to player 2's turn and confirm the state follows
 	require.NoError(t, d.SubmitPick(ctx, 1, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: 1}))
-	round, isMyTurn, finished, ok = d.DraftTurnState(1, 2)
+	round, isMyTurn, currentUserID, finished, ok = d.DraftTurnState(1, 2)
 	require.True(t, ok)
 	require.False(t, finished)
 	require.True(t, isMyTurn)
+	require.Equal(t, int64(2), currentUserID)
 
 	// drain the rest of the draft to completion
 	order := []int64{2, 2, 1, 1, 2, 2, 1}
 	for i, uid := range order {
 		require.NoError(t, d.SubmitPick(ctx, uid, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: int64(i + 2)}))
 	}
-	_, _, _, ok = d.DraftTurnState(1, 1)
-	require.False(t, ok, "finished draft is removed from d.groups entirely")
+	_, _, _, finished, ok = d.DraftTurnState(1, 1)
+	require.True(t, ok, "finished drafts stay queryable so clients can tell 'finished' from 'never started'")
+	require.True(t, finished)
 }
 
 func TestSubmitPickBeforeStart(t *testing.T) {
