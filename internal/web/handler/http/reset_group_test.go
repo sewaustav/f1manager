@@ -48,18 +48,23 @@ type fakeResetDraftCanceller struct{ cancelledGroup *int64 }
 
 func (f *fakeResetDraftCanceller) CancelGroup(groupID int64) { f.cancelledGroup = &groupID }
 
+type fakeResetTokenGate struct{ cancelledGroup *int64 }
+
+func (f *fakeResetTokenGate) Submitted(int64, int64, int) {}
+func (f *fakeResetTokenGate) CancelGroup(groupID int64)   { f.cancelledGroup = &groupID }
+
 type fakeResetPhase struct{ clearedGroup *int64 }
 
 func (f *fakeResetPhase) Get(int64) (string, int64, bool) { return "", 0, false }
 func (f *fakeResetPhase) Clear(groupID int64)             { f.clearedGroup = &groupID }
 
-func setupResetGroup(t *testing.T, u *fakeResetUser, setupDisp *fakeResetSetupDispatcher, ready *fakeResetReadyDispatcher, phase *fakeResetPhase, draft *fakeResetDraftCanceller) (*gin.Engine, *rsa.PrivateKey) {
+func setupResetGroup(t *testing.T, u *fakeResetUser, setupDisp *fakeResetSetupDispatcher, ready *fakeResetReadyDispatcher, phase *fakeResetPhase, draft *fakeResetDraftCanceller, gate *fakeResetTokenGate) (*gin.Engine, *rsa.PrivateKey) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	h := NewHttpHandler(nil, nil, nil, u, nil, setupDisp, ready, phase, draft)
+	h := NewHttpHandler(nil, nil, nil, u, nil, setupDisp, ready, phase, draft, gate)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")
@@ -78,8 +83,9 @@ func TestResetGroup_OrganizerSucceedsAndCancelsEverything(t *testing.T) {
 	ready := &fakeResetReadyDispatcher{}
 	phase := &fakeResetPhase{}
 	draft := &fakeResetDraftCanceller{}
+	gate := &fakeResetTokenGate{}
 
-	r, key := setupResetGroup(t, u, setupDisp, ready, phase, draft)
+	r, key := setupResetGroup(t, u, setupDisp, ready, phase, draft, gate)
 	w := doReq(r, http.MethodPost, "/api/v1/groups/reset", "", token(t, key, "7"))
 
 	require.Equal(t, 200, w.Code)
@@ -93,6 +99,8 @@ func TestResetGroup_OrganizerSucceedsAndCancelsEverything(t *testing.T) {
 	require.Equal(t, int64(7), *draft.cancelledGroup)
 	require.NotNil(t, phase.clearedGroup)
 	require.Equal(t, int64(7), *phase.clearedGroup)
+	require.NotNil(t, gate.cancelledGroup)
+	require.Equal(t, int64(7), *gate.cancelledGroup)
 }
 
 func TestResetGroup_NonOrganizerForbidden(t *testing.T) {
@@ -102,8 +110,9 @@ func TestResetGroup_NonOrganizerForbidden(t *testing.T) {
 	ready := &fakeResetReadyDispatcher{}
 	phase := &fakeResetPhase{}
 	draft := &fakeResetDraftCanceller{}
+	gate := &fakeResetTokenGate{}
 
-	r, key := setupResetGroup(t, u, setupDisp, ready, phase, draft)
+	r, key := setupResetGroup(t, u, setupDisp, ready, phase, draft, gate)
 	w := doReq(r, http.MethodPost, "/api/v1/groups/reset", "", token(t, key, "42"))
 
 	require.Equal(t, 403, w.Code)
@@ -112,17 +121,18 @@ func TestResetGroup_NonOrganizerForbidden(t *testing.T) {
 	require.Nil(t, ready.cancelledGroup)
 	require.Nil(t, draft.cancelledGroup)
 	require.Nil(t, phase.clearedGroup)
+	require.Nil(t, gate.cancelledGroup)
 }
 
 func TestResetGroup_RequiresAuth(t *testing.T) {
 	groupID := int64(7)
-	r, _ := setupResetGroup(t, &fakeResetUser{group: &groupID}, &fakeResetSetupDispatcher{}, &fakeResetReadyDispatcher{}, &fakeResetPhase{}, &fakeResetDraftCanceller{})
+	r, _ := setupResetGroup(t, &fakeResetUser{group: &groupID}, &fakeResetSetupDispatcher{}, &fakeResetReadyDispatcher{}, &fakeResetPhase{}, &fakeResetDraftCanceller{}, &fakeResetTokenGate{})
 	w := doReq(r, http.MethodPost, "/api/v1/groups/reset", "", "")
 	require.Equal(t, 401, w.Code)
 }
 
 func TestResetGroup_NoGroupReturns400(t *testing.T) {
-	r, key := setupResetGroup(t, &fakeResetUser{group: nil}, &fakeResetSetupDispatcher{}, &fakeResetReadyDispatcher{}, &fakeResetPhase{}, &fakeResetDraftCanceller{})
+	r, key := setupResetGroup(t, &fakeResetUser{group: nil}, &fakeResetSetupDispatcher{}, &fakeResetReadyDispatcher{}, &fakeResetPhase{}, &fakeResetDraftCanceller{}, &fakeResetTokenGate{})
 	w := doReq(r, http.MethodPost, "/api/v1/groups/reset", "", token(t, key, "42"))
 	require.Equal(t, 400, w.Code)
 }

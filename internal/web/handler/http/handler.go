@@ -32,6 +32,13 @@ type DraftCanceller interface {
 	CancelGroup(groupID int64)
 }
 
+// TokenSetupGate копит сабмиты token-setup и открывает первую гонку, когда
+// сдала вся группа — без этого фаза token_setup ни во что не переходила.
+type TokenSetupGate interface {
+	Submitted(groupID, userID int64, totalPlayers int)
+	CancelGroup(groupID int64)
+}
+
 type HttpHandler struct {
 	sim         Sim
 	crossSeason CrossSeason
@@ -42,6 +49,7 @@ type HttpHandler struct {
 	ready       ReadyDispatcher
 	phase       PhaseReader
 	draft       DraftCanceller
+	tokenSetup  TokenSetupGate
 }
 
 func NewHttpHandler(
@@ -54,6 +62,7 @@ func NewHttpHandler(
 	ready ReadyDispatcher,
 	phase PhaseReader,
 	draft DraftCanceller,
+	tokenSetup TokenSetupGate,
 ) *HttpHandler {
 	return &HttpHandler{
 		sim:         sim,
@@ -65,6 +74,7 @@ func NewHttpHandler(
 		ready:       ready,
 		phase:       phase,
 		draft:       draft,
+		tokenSetup:  tokenSetup,
 	}
 }
 
@@ -223,6 +233,14 @@ func (h *HttpHandler) MakeSetup(c *gin.Context) {
 	if err := h.crossSeason.MakeTokenSetup(ctx, user, req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Отмечаем сдачу: когда сдаст вся группа, откроется первая гонка и фаза
+	// уйдёт из token_setup в racing. Иначе группа зависает здесь навсегда.
+	if h.tokenSetup != nil {
+		if groupID, err := h.userData.GetUserGroup(ctx, user); err == nil && groupID != nil {
+			h.tokenSetup.Submitted(*groupID, user, h.manager.GroupSize(*groupID))
+		}
 	}
 
 	c.Status(201)
@@ -566,6 +584,9 @@ func (h *HttpHandler) ResetGroup(c *gin.Context) {
 	h.draft.CancelGroup(*groupID)
 	h.ready.CancelGroup(*groupID)
 	h.phase.Clear(*groupID)
+	if h.tokenSetup != nil {
+		h.tokenSetup.CancelGroup(*groupID)
+	}
 
 	c.Status(200)
 }
