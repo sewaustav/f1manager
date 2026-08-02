@@ -23,6 +23,8 @@ type Repo struct {
 	cars       map[int64]map[int64]models.Car     // group -> teamID -> car
 	principals map[int64]models.TeamPrincipal     // principalID -> principal
 	engines    []models.Engine
+	baseTeams  []models.Team  // шаблоны для GetBaseTeams/сидирования группы
+	allPilots  []models.Pilot // общий (не по группам) список — статический GetPilots
 }
 
 func New() *Repo {
@@ -84,6 +86,57 @@ func (r *Repo) SeedEngine(e models.Engine) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.engines = append(r.engines, e)
+}
+
+// SeedBaseTeams задаёт шаблоны команд, возвращаемые GetBaseTeams (используется
+// сервисом при сидировании/сбросе мира группы).
+func (r *Repo) SeedBaseTeams(teams []models.Team) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.baseTeams = append([]models.Team(nil), teams...)
+}
+
+func (r *Repo) GetBaseTeams(_ context.Context) ([]models.Team, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]models.Team, len(r.baseTeams))
+	copy(out, r.baseTeams)
+	return out, nil
+}
+
+// SeedStaticPilots задаёт общий (не по группам) список пилотов, возвращаемый
+// статическим GetPilots (используется сидированием — не путать с SeedPilot,
+// который заполняет пилота ВНУТРИ конкретной группы).
+func (r *Repo) SeedStaticPilots(pilots []models.Pilot) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.allPilots = append([]models.Pilot(nil), pilots...)
+}
+
+func (r *Repo) GetPilots(_ context.Context) ([]models.Pilot, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]models.Pilot, len(r.allPilots))
+	copy(out, r.allPilots)
+	return out, nil
+}
+
+// SavePlayer/SaveTeam/SavePilot реализуют DynamicRepo для сидирования —
+// поведение идентично Seed*, но идут через интерфейс (используются
+// Service.RegisterGroup/ResetGroup напрямую, а не только тестовой подготовкой).
+func (r *Repo) SavePlayer(_ context.Context, groupID int64, p models.Player) error {
+	r.SeedPlayer(groupID, p)
+	return nil
+}
+
+func (r *Repo) SaveTeam(_ context.Context, groupID int64, t models.Team) error {
+	r.SeedTeam(groupID, t)
+	return nil
+}
+
+func (r *Repo) SavePilot(_ context.Context, groupID int64, p models.Pilot) error {
+	r.SeedPilot(groupID, p)
+	return nil
 }
 
 // --- dynamic reads ---

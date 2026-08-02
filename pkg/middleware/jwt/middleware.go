@@ -30,21 +30,25 @@ func New(pubKey *rsa.PublicKey, issuer, audience string) *JWTAuthMiddleware {
 
 func (m *JWTAuthMiddleware) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var raw string
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			m.logger.Debug("missing authorization header", "path", c.Request.URL.Path)
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+				m.logger.Warn("invalid auth header format")
+				unauthorized(c)
+				return
+			}
+			raw = parts[1]
+		} else if q := c.Query("token"); q != "" {
+			raw = q // browsers cannot set WS headers; accept ?token= (same validation)
+		} else {
+			m.logger.Debug("missing authorization header and token query", "path", c.Request.URL.Path)
 			unauthorized(c)
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			m.logger.Warn("invalid auth header format")
-			unauthorized(c)
-			return
-		}
-
-		claims, err := m.verifyToken(parts[1])
+		claims, err := m.verifyToken(raw)
 		if err != nil {
 			// Сюда попадают истёкшие токены, кривые подписи и т.д.
 			m.logger.Info("token verification failed", "err", err, "client_ip", c.ClientIP())

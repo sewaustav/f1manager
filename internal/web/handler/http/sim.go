@@ -16,4 +16,9 @@ type Sim interface {
 type SetupDispatcher interface {
 	Submit(ctx context.Context, userID, groupID int64, setup dto.Setup) error
 	InitRound(groupID, stage int64, totalPlayers int)
+	RoundState(groupID int64) (submitted []int64, total int, ok bool)
+
+	// CancelGroup drops any open setup round for the group — see
+	// POST /groups/reset ("end the game early").
+	CancelGroup(groupID int64)
 }

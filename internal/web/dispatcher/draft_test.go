@@ -69,7 +69,7 @@ func (n *fakeNotifier) BroadcastGroup(_ int64, msg []byte) {
 func newDraftDispatcher(players []int64) (*DraftDispatcher, *fakeDraftService, *fakeNotifier) {
 	svc := &fakeDraftService{players: players}
 	nt := &fakeNotifier{}
-	d := NewDraft(svc, nt)
+	d := NewDraft(svc, nt, nil)
 	d.shuffle = func([]int64) {} // детерминизм: без перемешивания
 	return d, svc, nt
 }
@@ -104,11 +104,77 @@ func TestDraftTurnOrderAndCompletion(t *testing.T) {
 	require.ErrorIs(t, err, ErrDraftInactive)
 }
 
+// TestDraftTurnState covers recovering "whose turn is it" without relying on
+// the one-shot SendUser WS message — needed because SendUser silently drops
+// the message if the target's WS wasn't connected at that exact instant,
+// which otherwise deadlocks the whole draft forever.
+func TestDraftTurnState(t *testing.T) {
+	ctx := context.Background()
+	d, _, _ := newDraftDispatcher([]int64{1, 2})
+
+	_, _, _, ok := d.DraftTurnState(1, 1)
+	require.False(t, ok, "no active draft yet")
+
+	require.NoError(t, d.StartDraft(ctx, 1))
+
+	round, isMyTurn, finished, ok := d.DraftTurnState(1, 1)
+	require.True(t, ok)
+	require.False(t, finished)
+	require.Equal(t, 0, round)
+	require.True(t, isMyTurn, "player 1 goes first with no shuffle")
+
+	round, isMyTurn, finished, ok = d.DraftTurnState(1, 2)
+	require.True(t, ok)
+	require.False(t, finished)
+	require.Equal(t, 0, round)
+	require.False(t, isMyTurn, "not player 2's turn yet")
+
+	// advance to player 2's turn and confirm the state follows
+	require.NoError(t, d.SubmitPick(ctx, 1, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: 1}))
+	round, isMyTurn, finished, ok = d.DraftTurnState(1, 2)
+	require.True(t, ok)
+	require.False(t, finished)
+	require.True(t, isMyTurn)
+
+	// drain the rest of the draft to completion
+	order := []int64{2, 2, 1, 1, 2, 2, 1}
+	for i, uid := range order {
+		require.NoError(t, d.SubmitPick(ctx, uid, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: int64(i + 2)}))
+	}
+	_, _, _, ok = d.DraftTurnState(1, 1)
+	require.False(t, ok, "finished draft is removed from d.groups entirely")
+}
+
 func TestSubmitPickBeforeStart(t *testing.T) {
 	ctx := context.Background()
 	d, _, _ := newDraftDispatcher([]int64{1})
 	err := d.SubmitPick(ctx, 1, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: 1})
 	require.ErrorIs(t, err, ErrDraftInactive)
+}
+
+func TestDraftDispatcher_PhaseTransitions(t *testing.T) {
+	ctx := context.Background()
+	svc := &fakeDraftService{players: []int64{1, 2}}
+	nt := &fakeNotifier{}
+	phase := NewPhaseTracker()
+	d := NewDraft(svc, nt, phase)
+	d.shuffle = func([]int64) {}
+
+	require.NoError(t, d.StartDraft(ctx, 1))
+	got, stage, ok := phase.Get(1)
+	require.True(t, ok)
+	require.Equal(t, PhaseDraft, got)
+	require.Equal(t, int64(0), stage)
+
+	order := []int64{1, 2, 2, 1, 1, 2, 2, 1}
+	for i, uid := range order {
+		require.NoError(t, d.SubmitPick(ctx, uid, 1, dto.Draft{Pick: dto.DraftPilot, ItemID: int64(i)}))
+	}
+
+	got, stage, ok = phase.Get(1)
+	require.True(t, ok)
+	require.Equal(t, PhaseTokenSetup, got)
+	require.Equal(t, int64(0), stage)
 }
 
 func TestApplyErrorDoesNotAdvance(t *testing.T) {

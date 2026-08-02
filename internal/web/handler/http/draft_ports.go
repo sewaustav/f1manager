@@ -10,6 +10,9 @@ import (
 type draftDispatcher interface {
 	StartDraft(ctx context.Context, groupID int64) error
 	SubmitPick(ctx context.Context, userID, groupID int64, pick dto.Draft) error
+
+	// DraftTurnState восстанавливает состояние хода — см. GET /draft/state.
+	DraftTurnState(groupID, userID int64) (round int, isMyTurn bool, finished bool, ok bool)
 }
 
 // draftService — операции сервиса, нужные draft-handler'у.

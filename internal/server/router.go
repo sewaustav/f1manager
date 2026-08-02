@@ -50,6 +50,8 @@ func setupRouter(
 		game.POST("/base", h.UpdateBase)
 		game.POST("/transfers/pilot", h.PilotTransfer)
 		game.POST("/transfers/principal", h.PrincipalTransfer)
+		game.POST("/fire", h.Fire)
+		game.POST("/ready", h.Ready)
 
 		// данные
 		game.GET("/pilots", h.GetPilots)
@@ -61,10 +63,12 @@ func setupRouter(
 		game.GET("/players/squads", h.GetPlayersSquad)
 		game.GET("/engines", h.GetEngines)
 		game.GET("/budget", h.GetBudget)
+		game.GET("/season/state", h.GetSeasonState)
 
 		// группы
 		game.POST("/groups", h.RegisterGroup)
 		game.POST("/groups/join", h.JoinGroup)
+		game.POST("/groups/reset", h.ResetGroup)
 	}
 
 	return r

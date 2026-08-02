@@ -14,4 +14,5 @@ type CrossSeason interface {
 	PrincipalTransfer(ctx context.Context, userID int64, req dto.PrincipalTransfer) error
 	ResetSeason(ctx context.Context, groupID int64) error
 	PickItem(ctx context.Context, userID int64, item dto.DraftItem) error
+	Fire(ctx context.Context, userID int64, req dto.Fire) error
 }

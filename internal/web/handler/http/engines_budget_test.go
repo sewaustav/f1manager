@@ -57,6 +57,7 @@ type fakeUser struct {
 func (f *fakeUser) GetUserGroup(context.Context, int64) (*int64, error)   { return f.group, nil }
 func (f *fakeUser) RegisterGroup(context.Context, int64, dto.Group) error { return nil }
 func (f *fakeUser) JoinGroup(context.Context, int64, dto.Group) error     { return nil }
+func (f *fakeUser) ResetGroup(context.Context, int64) error               { return nil }
 
 func setupEnginesBudget(t *testing.T, d Data, u User) (*gin.Engine, *rsa.PrivateKey) {
 	t.Helper()
@@ -64,7 +65,7 @@ func setupEnginesBudget(t *testing.T, d Data, u User) (*gin.Engine, *rsa.Private
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	h := NewHttpHandler(nil, nil, d, u, nil, nil)
+	h := NewHttpHandler(nil, nil, d, u, nil, nil, nil, nil, nil)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")

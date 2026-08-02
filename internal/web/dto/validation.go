@@ -74,3 +74,9 @@ type PrincipalTransfer struct {
 	PrincipalID int64 `json:"principal_id"`
 	Price       int   `json:"price"`
 }
+
+// Fire — тело запроса на увольнение пилота или тим-принципала игрока.
+type Fire struct {
+	Who string `json:"who"` // "pilot" | "principal"
+	ID  int64  `json:"id"`
+}

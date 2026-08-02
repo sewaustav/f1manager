@@ -26,6 +26,7 @@ func (h *DraftHandler) RegisterRoutes(rg *gin.RouterGroup, mw *jwtmw.JWTAuthMidd
 	{
 		routes.POST("/start", h.Start)
 		routes.POST("/pick", h.Pick)
+		routes.GET("/state", h.State)
 		routes.POST("/bots/swap", h.SwapBots)
 	}
 }
@@ -74,6 +75,30 @@ func (h *DraftHandler) Pick(c *gin.Context) {
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
+}
+
+// State recovers whose turn it currently is — a client polls this on
+// load/reconnect since draft_turn is otherwise a single, targeted, one-shot
+// WS message that is silently dropped if the recipient's socket wasn't
+// connected at that exact instant, which would otherwise deadlock the draft.
+func (h *DraftHandler) State(c *gin.Context) {
+	userID, ok := draftUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	groupID, err := h.service.GetUserGroup(c.Request.Context(), userID)
+	if err != nil || groupID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "group not found"})
+		return
+	}
+	round, isMyTurn, finished, active := h.dispatcher.DraftTurnState(*groupID, userID)
+	c.JSON(http.StatusOK, gin.H{
+		"active":     active,
+		"round":      round,
+		"is_my_turn": isMyTurn,
+		"finished":   finished,
+	})
 }
 
 func (h *DraftHandler) SwapBots(c *gin.Context) {
