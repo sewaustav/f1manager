@@ -6,8 +6,15 @@ import (
 	"f1/internal/models"
 )
 
-func (s *Service) GetPilotsService(ctx context.Context) ([]models.Pilot, error) {
-	return s.static.GetPilots(ctx)
+// GetPilotsService возвращает пилотов группы игрока с их текущим статусом
+// драфта (Team != nil у уже выбранного пилота) — не голый статический
+// список, который никогда не отражал бы, кто уже занят.
+func (s *Service) GetPilotsService(ctx context.Context, userID int64) ([]models.Pilot, error) {
+	groupID, err := s.getUserGroup(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.dynamic.GetPilotsByGroup(ctx, groupID)
 }
 
 func (s *Service) GetPrincipalsService(ctx context.Context) ([]models.TeamPrincipal, error) {
@@ -47,11 +54,17 @@ func (s *Service) GetMyTeamService(ctx context.Context, userID int64) (models.My
 	return s.buildMyTeam(ctx, groupID, player)
 }
 
-// buildMyTeam собирает MyTeam для одного игрока.
+// buildMyTeam собирает MyTeam для одного игрока. До того как игрок выберет
+// команду на драфте, player.Team == 0 — в этом случае Team остаётся
+// нулевым значением вместо похода в Redis за несуществующим ключом.
 func (s *Service) buildMyTeam(ctx context.Context, groupID int64, player models.Player) (models.MyTeam, error) {
-	team, err := s.dynamic.GetTeamByGroup(ctx, player.Team, groupID)
-	if err != nil {
-		return models.MyTeam{}, err
+	mt := models.MyTeam{ID: player.ID}
+	if player.Team != 0 {
+		team, err := s.dynamic.GetTeamByGroup(ctx, player.Team, groupID)
+		if err != nil {
+			return models.MyTeam{}, err
+		}
+		mt.Team = team
 	}
 
 	pilots, err := s.dynamic.GetPlayerPilots(ctx, player.ID, groupID)
@@ -59,7 +72,6 @@ func (s *Service) buildMyTeam(ctx context.Context, groupID int64, player models.
 		return models.MyTeam{}, err
 	}
 
-	mt := models.MyTeam{ID: player.ID, Team: team}
 	if len(pilots) > 0 {
 		mt.Pilot1 = pilots[0]
 	}

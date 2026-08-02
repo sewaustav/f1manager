@@ -92,12 +92,13 @@ func (h *DraftHandler) State(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "group not found"})
 		return
 	}
-	round, isMyTurn, finished, active := h.dispatcher.DraftTurnState(*groupID, userID)
+	round, isMyTurn, currentUserID, finished, active := h.dispatcher.DraftTurnState(*groupID, userID)
 	c.JSON(http.StatusOK, gin.H{
-		"active":     active,
-		"round":      round,
-		"is_my_turn": isMyTurn,
-		"finished":   finished,
+		"active":          active,
+		"round":           round,
+		"is_my_turn":      isMyTurn,
+		"finished":        finished,
+		"current_user_id": currentUserID,
 	})
 }
 

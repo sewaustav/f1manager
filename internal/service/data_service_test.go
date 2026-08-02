@@ -34,6 +34,26 @@ func TestGetMyTeamService(t *testing.T) {
 	require.NotEmpty(t, mt.Pilot2.Name)
 }
 
+// Before a player has picked a team in the draft (Team == 0), buildMyTeam
+// must not try to look up team 0 in Redis — that key never exists, and used
+// to surface as a raw "redis: not found" error on the My Team screen and on
+// /players/squads for the whole group (one team-less player broke everyone's
+// view).
+func TestGetMyTeamService_NoTeamPickedYet(t *testing.T) {
+	ctx := context.Background()
+	r := memory.New()
+	const g = int64(1)
+
+	r.SeedPlayer(g, models.Player{ID: 1})
+
+	svc := New(r, r, nil, nil, nil)
+
+	mt, err := svc.GetMyTeamService(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), mt.Team.ID)
+	require.Empty(t, mt.Team.Name)
+}
+
 func TestGetPlayersTeamsService(t *testing.T) {
 	ctx := context.Background()
 	r := memory.New()
@@ -61,6 +81,34 @@ func TestGetPlayersTeamsService(t *testing.T) {
 	}
 	require.True(t, names["Ferrari"])
 	require.True(t, names["McLaren"])
+}
+
+// /pilots used to be a flat static list with no group context, so it never
+// reflected which pilots were already drafted — every pilot always showed
+// as pickable even after being taken. GetPilotsService must return the
+// group-scoped pilots (with Team populated for already-drafted ones).
+func TestGetPilotsService_IsGroupScopedWithDraftStatus(t *testing.T) {
+	ctx := context.Background()
+	r := memory.New()
+	const g = int64(1)
+	owner := int64(1)
+
+	r.SeedPlayer(g, models.Player{ID: 1})
+	r.SeedPilot(g, models.Pilot{ID: 1000, Name: "Taken", Team: &owner})
+	r.SeedPilot(g, models.Pilot{ID: 1001, Name: "Free"})
+
+	svc := New(r, r, nil, nil, nil)
+
+	pilots, err := svc.GetPilotsService(ctx, 1)
+	require.NoError(t, err)
+	require.Len(t, pilots, 2)
+
+	byName := map[string]models.Pilot{}
+	for _, p := range pilots {
+		byName[p.Name] = p
+	}
+	require.NotNil(t, byName["Taken"].Team)
+	require.Nil(t, byName["Free"].Team)
 }
 
 func TestGetTrackInfoService(t *testing.T) {

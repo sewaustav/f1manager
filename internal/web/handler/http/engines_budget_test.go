@@ -23,7 +23,7 @@ type fakeData struct {
 	tokens  int
 }
 
-func (f *fakeData) GetPilotsService(context.Context) ([]models.Pilot, error) { return nil, nil }
+func (f *fakeData) GetPilotsService(context.Context, int64) ([]models.Pilot, error) { return nil, nil }
 func (f *fakeData) GetTeamsService(context.Context, int64) ([]models.Team, error) {
 	return nil, nil
 }
