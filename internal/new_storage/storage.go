@@ -40,7 +40,7 @@ type DynamicRepo interface {
 	GetLastRaceResults(ctx context.Context, groupID int64) ([]models.RaceResult, int64, error)
 
 	// Результаты гонки
-	HandleRace(ctx context.Context, race []models.RaceResult, groupID int64) error
+	HandleRace(ctx context.Context, race []models.RaceResult, groupID, stage int64) error
 
 	// Обновление состояния
 	UpdateCar(ctx context.Context, teamID, groupID int64, car models.Car) error

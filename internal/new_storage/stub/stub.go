@@ -104,7 +104,7 @@ func (d *Dynamic) GetLastRaceResults(ctx context.Context, groupID int64) ([]mode
 	return nil, 0, ErrNotImplemented
 }
 
-func (d *Dynamic) HandleRace(ctx context.Context, race []models.RaceResult, groupID int64) error {
+func (d *Dynamic) HandleRace(ctx context.Context, race []models.RaceResult, groupID, stage int64) error {
 	return ErrNotImplemented
 }
 

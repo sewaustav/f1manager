@@ -266,8 +266,16 @@ func (d *Dynamic) GetLastRaceResults(ctx context.Context, groupID int64) ([]mode
 
 // --- race ---
 
-func (d *Dynamic) HandleRace(ctx context.Context, race []models.RaceResult, groupID int64) error {
+func (d *Dynamic) HandleRace(ctx context.Context, race []models.RaceResult, groupID, stage int64) error {
 	if err := d.setJSON(ctx, lastRaceKey(groupID), race); err != nil {
+		return err
+	}
+	// Записываем этап вместе с результатами: GetLastRaceResults читает его из
+	// lastStageKey, а писать этот ключ раньше было некому — /race-result
+	// всегда отдавал stage:0. Из-за этого клиент не мог отличить "результат
+	// моей гонки" от чужого и ждал вечно, а окно апдейтов (этапы 3/8/13)
+	// не открывалось никогда.
+	if err := d.rdb.Set(ctx, lastStageKey(groupID), stage, 0).Err(); err != nil {
 		return err
 	}
 	for _, r := range race {
