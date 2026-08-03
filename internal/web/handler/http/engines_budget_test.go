@@ -58,6 +58,7 @@ func (f *fakeUser) GetUserGroup(context.Context, int64) (*int64, error)   { retu
 func (f *fakeUser) RegisterGroup(context.Context, int64, dto.Group) error { return nil }
 func (f *fakeUser) JoinGroup(context.Context, int64, dto.Group) error     { return nil }
 func (f *fakeUser) ResetGroup(context.Context, int64) error               { return nil }
+func (f *fakeUser) LeaveGroup(context.Context, int64) error               { return nil }
 
 func setupEnginesBudget(t *testing.T, d Data, u User) (*gin.Engine, *rsa.PrivateKey) {
 	t.Helper()

@@ -673,3 +673,68 @@ func (h *HttpHandler) GetSeasonState(c *gin.Context) {
 		"total_players":    total,
 	})
 }
+
+// --- Трансферные предложения и выход из группы ---
+
+// GetIncomingOffers — предложения выкупить пилота, адресованные игроку.
+// Клиент опрашивает этот список: доставка через WS оказалась ненадёжной.
+func (h *HttpHandler) GetIncomingOffers(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	offers, err := h.crossSeason.ListIncomingOffers(ctx, user)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, offers)
+}
+
+// RespondToOffer — владелец принимает или отклоняет предложение.
+func (h *HttpHandler) RespondToOffer(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	var req dto.OfferResponse
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.crossSeason.RespondToOffer(ctx, user, req.OfferID, req.Accept); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(200)
+}
+
+// LeaveGroup — выход игрока из группы. Организатор уйти не может: группа
+// заводится под его id, без него она осталась бы без владельца — ему нужен
+// POST /groups/reset.
+func (h *HttpHandler) LeaveGroup(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	groupID, err := h.userData.GetUserGroup(ctx, user)
+	if err != nil || groupID == nil {
+		c.JSON(400, gin.H{"error": "group not found"})
+		return
+	}
+	if user == *groupID {
+		c.JSON(400, gin.H{"error": "организатор не может выйти из своей группы — завершите игру"})
+		return
+	}
+	if err := h.userData.LeaveGroup(ctx, user); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(200)
+}

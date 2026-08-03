@@ -51,6 +51,16 @@ type DynamicRepo interface {
 
 	// Трансферы
 	ExecutePilotTransfer(ctx context.Context, pilotID, fromTeamID, toTeamID int64, cost int) error
+
+	// Трансферные предложения между игроками — хранятся на сервере, чтобы
+	// владелец мог ответить позже и доставка не зависела от живого WS.
+	CreateTransferOffer(ctx context.Context, groupID int64, o models.TransferOffer) (int64, error)
+	GetTransferOffer(ctx context.Context, groupID, offerID int64) (models.TransferOffer, error)
+	ListTransferOffers(ctx context.Context, groupID int64) ([]models.TransferOffer, error)
+	DeleteTransferOffer(ctx context.Context, groupID, offerID int64) error
+
+	// LeaveGroup выводит игрока из группы, освобождая его пилотов.
+	LeaveGroup(ctx context.Context, userID, groupID int64) error
 	ExecutePrincipalTransfer(ctx context.Context, principalID, fromTeamID, toTeamID int64, cost int) error
 
 	// Межсезонье

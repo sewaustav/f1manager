@@ -232,3 +232,21 @@ func (e *EngineRepo) UpdatePilot(ctx context.Context, groupID int64, pilot model
 func (e *EngineRepo) UpdatePilotTrack(ctx context.Context, groupID int64, pt models.PilotTrack) error {
 	return ErrNotImplemented
 }
+
+func (d *Dynamic) CreateTransferOffer(context.Context, int64, models.TransferOffer) (int64, error) {
+	return 0, ErrNotImplemented
+}
+
+func (d *Dynamic) GetTransferOffer(context.Context, int64, int64) (models.TransferOffer, error) {
+	return models.TransferOffer{}, ErrNotImplemented
+}
+
+func (d *Dynamic) ListTransferOffers(context.Context, int64) ([]models.TransferOffer, error) {
+	return nil, ErrNotImplemented
+}
+
+func (d *Dynamic) DeleteTransferOffer(context.Context, int64, int64) error {
+	return ErrNotImplemented
+}
+
+func (d *Dynamic) LeaveGroup(context.Context, int64, int64) error { return ErrNotImplemented }

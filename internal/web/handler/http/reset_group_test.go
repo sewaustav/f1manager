@@ -23,7 +23,7 @@ type fakeResetUser struct {
 	resetGroupID int64
 }
 
-func (f *fakeResetUser) GetUserGroup(context.Context, int64) (*int64, error)  { return f.group, nil }
+func (f *fakeResetUser) GetUserGroup(context.Context, int64) (*int64, error)   { return f.group, nil }
 func (f *fakeResetUser) RegisterGroup(context.Context, int64, dto.Group) error { return nil }
 func (f *fakeResetUser) JoinGroup(context.Context, int64, dto.Group) error     { return nil }
 func (f *fakeResetUser) ResetGroup(_ context.Context, groupID int64) error {
@@ -32,12 +32,14 @@ func (f *fakeResetUser) ResetGroup(_ context.Context, groupID int64) error {
 	return nil
 }
 
+func (f *fakeResetUser) LeaveGroup(context.Context, int64) error { return nil }
+
 type fakeResetSetupDispatcher struct{ cancelledGroup *int64 }
 
 func (f *fakeResetSetupDispatcher) Submit(context.Context, int64, int64, dto.Setup) error { return nil }
-func (f *fakeResetSetupDispatcher) InitRound(int64, int64, int)                          {}
-func (f *fakeResetSetupDispatcher) RoundState(int64) ([]int64, int, bool)                { return nil, 0, false }
-func (f *fakeResetSetupDispatcher) CancelGroup(groupID int64)                            { f.cancelledGroup = &groupID }
+func (f *fakeResetSetupDispatcher) InitRound(int64, int64, int)                           {}
+func (f *fakeResetSetupDispatcher) RoundState(int64) ([]int64, int, bool)                 { return nil, 0, false }
+func (f *fakeResetSetupDispatcher) CancelGroup(groupID int64)                             { f.cancelledGroup = &groupID }
 
 type fakeResetReadyDispatcher struct{ cancelledGroup *int64 }
 
