@@ -69,6 +69,9 @@ func setupRouter(
 		game.POST("/groups", h.RegisterGroup)
 		game.POST("/groups/join", h.JoinGroup)
 		game.POST("/groups/reset", h.ResetGroup)
+		game.POST("/groups/leave", h.LeaveGroup)
+		game.GET("/transfers/offers", h.GetIncomingOffers)
+		game.POST("/transfers/offers/respond", h.RespondToOffer)
 	}
 
 	return r

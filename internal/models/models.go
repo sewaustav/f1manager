@@ -195,6 +195,21 @@ type MyTeam struct {
 	TeamPrincipal TeamPrincipal `json:"team_principal"`
 }
 
+// TransferOffer — предложение выкупить пилота у другого игрока. Хранится на
+// сервере, а не висит в открытом HTTP-запросе: владелец может быть офлайн и
+// ответить позже, и доставка не зависит от живого WS-соединения.
+type TransferOffer struct {
+	ID      int64  `json:"id"`
+	PilotID int64  `json:"pilot_id"`
+	// PilotName дублируется в оффере, чтобы список входящих предложений
+	// читался одним запросом, без похода за каждым пилотом.
+	PilotName string `json:"pilot_name"`
+	BuyerID   int64  `json:"buyer_id"`
+	BuyerName string `json:"buyer_name"`
+	OwnerID   int64  `json:"owner_id"`
+	Price     int    `json:"price"`
+}
+
 // Структуры для вывода результатов гонки
 type RaceResult struct {
 	PilotID       int64  `json:"pilot_id"`

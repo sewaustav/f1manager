@@ -43,6 +43,9 @@ func standTeamsKey(g int64) string   { return fmt.Sprintf("g:%d:standing:teams",
 func lastRaceKey(g int64) string     { return fmt.Sprintf("g:%d:lastrace", g) }
 func lastStageKey(g int64) string    { return fmt.Sprintf("g:%d:laststage", g) }
 func groupMetaKey(g int64) string    { return fmt.Sprintf("g:%d:meta", g) }
+func offerKey(g, id int64) string    { return fmt.Sprintf("g:%d:offer:%d", g, id) }
+func offersIdx(g int64) string       { return fmt.Sprintf("g:%d:offers", g) }
+func offerSeqKey(g int64) string     { return fmt.Sprintf("g:%d:offerseq", g) }
 func groupByNameKey(n string) string { return fmt.Sprintf("groups:name:%s", n) }
 func userGroupKey(uid int64) string  { return fmt.Sprintf("user:%d:group", uid) }
 
@@ -345,6 +348,17 @@ func (d *Dynamic) ExecutePilotTransfer(ctx context.Context, pilotID, fromTeamID,
 	}
 	owner := toTeamID
 	pilot.Team = &owner
+	// Пилот должен переехать и в гараж покупателя: иначе он остаётся
+	// приписан к прежней команде и не появляется в её составе
+	// (GetPilotsByTeam ищет именно по гаражу).
+	buyer, err := d.GetPlayer(ctx, toTeamID, groupID)
+	if err != nil {
+		return err
+	}
+	if buyer.Team != 0 {
+		garage := buyer.Team
+		pilot.Garage = &garage
+	}
 	return d.setJSON(ctx, pilotKey(groupID, pilotID), pilot)
 }
 
@@ -460,6 +474,92 @@ func (d *Dynamic) JoinGroup(ctx context.Context, userID int64, groupID int64, pa
 		return errors.New("invalid group password")
 	}
 	return d.SavePlayer(ctx, groupID, models.Player{ID: userID})
+}
+
+// --- трансферные предложения ---
+
+// CreateTransferOffer сохраняет предложение и возвращает его id.
+func (d *Dynamic) CreateTransferOffer(ctx context.Context, groupID int64, o models.TransferOffer) (int64, error) {
+	id, err := d.rdb.Incr(ctx, offerSeqKey(groupID)).Result()
+	if err != nil {
+		return 0, err
+	}
+	o.ID = id
+	if err := d.setJSON(ctx, offerKey(groupID, id), o); err != nil {
+		return 0, err
+	}
+	if err := d.rdb.SAdd(ctx, offersIdx(groupID), id).Err(); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// GetTransferOffer возвращает предложение по id.
+func (d *Dynamic) GetTransferOffer(ctx context.Context, groupID, offerID int64) (models.TransferOffer, error) {
+	var o models.TransferOffer
+	ok, err := d.getJSON(ctx, offerKey(groupID, offerID), &o)
+	if err != nil {
+		return models.TransferOffer{}, err
+	}
+	if !ok {
+		return models.TransferOffer{}, ErrNotFound
+	}
+	return o, nil
+}
+
+// ListTransferOffers возвращает все открытые предложения группы.
+func (d *Dynamic) ListTransferOffers(ctx context.Context, groupID int64) ([]models.TransferOffer, error) {
+	ids, err := d.rdb.SMembers(ctx, offersIdx(groupID)).Result()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.TransferOffer, 0, len(ids))
+	for _, raw := range ids {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			continue
+		}
+		var o models.TransferOffer
+		ok, err := d.getJSON(ctx, offerKey(groupID, id), &o)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
+// DeleteTransferOffer убирает предложение (принято, отклонено или отменено).
+func (d *Dynamic) DeleteTransferOffer(ctx context.Context, groupID, offerID int64) error {
+	if err := d.rdb.SRem(ctx, offersIdx(groupID), offerID).Err(); err != nil {
+		return err
+	}
+	return d.rdb.Del(ctx, offerKey(groupID, offerID)).Err()
+}
+
+// LeaveGroup удаляет игрока из группы: освобождает его пилотов (они снова
+// становятся свободными агентами), убирает его из индекса участников, стирает
+// его состояние и привязку user->group. Команда, которую он занимал, просто
+// перестаёт быть занятой — отдельного владельца у неё не хранится.
+func (d *Dynamic) LeaveGroup(ctx context.Context, userID, groupID int64) error {
+	pilots, err := d.GetPlayerPilots(ctx, userID, groupID)
+	if err != nil {
+		return err
+	}
+	for _, p := range pilots {
+		if err := d.SetPilotOwner(ctx, p.ID, groupID, nil, nil); err != nil {
+			return err
+		}
+	}
+	if err := d.rdb.SRem(ctx, playersIdx(groupID), userID).Err(); err != nil {
+		return err
+	}
+	if err := d.rdb.Del(ctx, playerKey(groupID, userID)).Err(); err != nil {
+		return err
+	}
+	return d.rdb.Del(ctx, userGroupKey(userID)).Err()
 }
 
 // --- draft ---

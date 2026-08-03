@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+
+	"f1/internal/models"
 	"f1/internal/web/dto"
 )
 
@@ -15,4 +17,8 @@ type CrossSeason interface {
 	ResetSeason(ctx context.Context, groupID int64) error
 	PickItem(ctx context.Context, userID int64, item dto.DraftItem) error
 	Fire(ctx context.Context, userID int64, req dto.Fire) error
+
+	// Трансферные предложения между игроками (см. POST /transfers/pilot).
+	ListIncomingOffers(ctx context.Context, userID int64) ([]models.TransferOffer, error)
+	RespondToOffer(ctx context.Context, userID, offerID int64, accept bool) error
 }
