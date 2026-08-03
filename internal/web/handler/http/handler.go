@@ -713,9 +713,13 @@ func (h *HttpHandler) RespondToOffer(c *gin.Context) {
 	c.Status(200)
 }
 
-// LeaveGroup — выход игрока из группы. Организатор уйти не может: группа
-// заводится под его id, без него она осталась бы без владельца — ему нужен
-// POST /groups/reset.
+// LeaveGroup — выход игрока из группы.
+//
+// Организатору выход тоже разрешён. Группа остаётся жить: её мета и
+// остальные участники на месте, войти по ID по-прежнему можно. Пока
+// организатора нет, некому вызвать POST /groups/reset (право завязано на
+// совпадение id пользователя и группы), но он вернёт его, просто зайдя
+// обратно по тому же ID.
 func (h *HttpHandler) LeaveGroup(c *gin.Context) {
 	ctx := c.Request.Context()
 	user, exist := h.getUser(c)
@@ -726,10 +730,6 @@ func (h *HttpHandler) LeaveGroup(c *gin.Context) {
 	groupID, err := h.userData.GetUserGroup(ctx, user)
 	if err != nil || groupID == nil {
 		c.JSON(400, gin.H{"error": "group not found"})
-		return
-	}
-	if user == *groupID {
-		c.JSON(400, gin.H{"error": "организатор не может выйти из своей группы — завершите игру"})
 		return
 	}
 	if err := h.userData.LeaveGroup(ctx, user); err != nil {
