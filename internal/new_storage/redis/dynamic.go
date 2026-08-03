@@ -539,6 +539,43 @@ func (d *Dynamic) DeleteTransferOffer(ctx context.Context, groupID, offerID int6
 	return d.rdb.Del(ctx, offerKey(groupID, offerID)).Err()
 }
 
+// ClearGroup вычищает состав и накопленное состояние группы.
+//
+// Нужно при создании группы заново: идентификатор группы — это id её
+// организатора, поэтому пересоздание попадает в тот же самый ключ. Без
+// очистки в «новую» группу автоматически подтягивались участники прошлой
+// сессии вместе с их бюджетами, предложениями и таблицей результатов.
+func (d *Dynamic) ClearGroup(ctx context.Context, groupID int64) error {
+	players, err := d.GetPlayers(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	for _, p := range players {
+		if err := d.rdb.Del(ctx, playerKey(groupID, p.ID)).Err(); err != nil {
+			return err
+		}
+		if err := d.rdb.Del(ctx, userGroupKey(p.ID)).Err(); err != nil {
+			return err
+		}
+	}
+	offers, err := d.ListTransferOffers(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	for _, o := range offers {
+		if err := d.DeleteTransferOffer(ctx, groupID, o.ID); err != nil {
+			return err
+		}
+	}
+	return d.rdb.Del(ctx,
+		playersIdx(groupID),
+		lastRaceKey(groupID),
+		lastStageKey(groupID),
+		standDriversKey(groupID),
+		standTeamsKey(groupID),
+	).Err()
+}
+
 // LeaveGroup удаляет игрока из группы: освобождает его пилотов (они снова
 // становятся свободными агентами), убирает его из индекса участников, стирает
 // его состояние и привязку user->group. Команда, которую он занимал, просто

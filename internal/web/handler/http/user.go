@@ -18,6 +18,9 @@ type User interface {
 
 	// LeaveGroup выводит игрока из группы (POST /groups/leave).
 	LeaveGroup(ctx context.Context, userID int64) error
+
+	// KickPlayer — организатор удаляет участника (POST /groups/kick).
+	KickPlayer(ctx context.Context, organizerID, targetID int64) error
 }
 
 type Manager interface {

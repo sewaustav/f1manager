@@ -526,7 +526,43 @@ func (h *HttpHandler) RegisterGroup(c *gin.Context) {
 		return
 	}
 
+	// Группа пересоздаётся под тем же id (он равен id организатора), поэтому
+	// сбрасываем и то, что живёт в памяти: иначе свежая группа унаследует
+	// фазу, недоигранный драфт или собранную готовность прошлой сессии.
+	h.clearGroupRuntime(user)
+
 	c.JSON(200, gin.H{"message": "group registered"})
+}
+
+// clearGroupRuntime сбрасывает всё in-memory состояние группы.
+func (h *HttpHandler) clearGroupRuntime(groupID int64) {
+	h.dispatcher.CancelGroup(groupID)
+	h.draft.CancelGroup(groupID)
+	h.ready.CancelGroup(groupID)
+	h.phase.Clear(groupID)
+	if h.tokenSetup != nil {
+		h.tokenSetup.CancelGroup(groupID)
+	}
+}
+
+// KickPlayer — организатор удаляет участника из группы.
+func (h *HttpHandler) KickPlayer(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	var req dto.KickPlayer
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.userData.KickPlayer(ctx, user, req.UserID); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(200)
 }
 
 func (h *HttpHandler) JoinGroup(c *gin.Context) {

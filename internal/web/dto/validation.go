@@ -75,6 +75,11 @@ type PrincipalTransfer struct {
 	Price       int   `json:"price"`
 }
 
+// KickPlayer — удаление участника организатором.
+type KickPlayer struct {
+	UserID int64 `json:"user_id"`
+}
+
 // OfferResponse — ответ владельца на предложение выкупить его пилота.
 type OfferResponse struct {
 	OfferID int64 `json:"offer_id"`

@@ -160,3 +160,48 @@ func mustOffers(t *testing.T, svc *Service, userID int64) []models.TransferOffer
 	require.NoError(t, err)
 	return o
 }
+
+// Идентификатор группы равен id организатора, поэтому пересоздание попадает
+// в тот же ключ. Без очистки в «новую» группу автоматически подтягивались
+// участники прошлой сессии — ровно этот баг и наблюдался вживую.
+func TestRegisterGroupStartsFromAnEmptyRoster(t *testing.T) {
+	ctx := context.Background()
+	r := memory.New()
+	r.SeedBaseTeams([]models.Team{{ID: 100}})
+	r.SeedStaticPilots([]models.Pilot{{ID: 600}})
+
+	svc := New(r, r, nil, nil, nil)
+	const organizer = int64(25)
+
+	require.NoError(t, svc.RegisterGroup(ctx, organizer, dto.Group{Name: "первая", Password: "p"}))
+	r.SeedPlayer(organizer, models.Player{ID: 24})
+	players, _ := r.GetPlayers(ctx, organizer)
+	require.Len(t, players, 2)
+
+	require.NoError(t, svc.RegisterGroup(ctx, organizer, dto.Group{Name: "вторая", Password: "p"}))
+
+	players, err := r.GetPlayers(ctx, organizer)
+	require.NoError(t, err)
+	require.Len(t, players, 1, "в новой группе только организатор")
+	require.Equal(t, organizer, players[0].ID)
+}
+
+func TestKickPlayerRemovesThem(t *testing.T) {
+	ctx := context.Background()
+	svc, r := transferFixture(t)
+
+	require.NoError(t, svc.KickPlayer(ctx, 1, 2))
+
+	players, _ := r.GetPlayers(ctx, 1)
+	for _, p := range players {
+		require.NotEqual(t, int64(2), p.ID)
+	}
+}
+
+func TestKickPlayerOnlyByOrganizer(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := transferFixture(t)
+
+	require.Error(t, svc.KickPlayer(ctx, 2, 1), "не организатор")
+	require.Error(t, svc.KickPlayer(ctx, 1, 1), "нельзя выгнать себя")
+}

@@ -61,6 +61,10 @@ type DynamicRepo interface {
 
 	// LeaveGroup выводит игрока из группы, освобождая его пилотов.
 	LeaveGroup(ctx context.Context, userID, groupID int64) error
+
+	// ClearGroup вычищает состав и накопленное состояние группы — нужно при
+	// пересоздании группы под тем же id (id группы == id организатора).
+	ClearGroup(ctx context.Context, groupID int64) error
 	ExecutePrincipalTransfer(ctx context.Context, principalID, fromTeamID, toTeamID int64, cost int) error
 
 	// Межсезонье

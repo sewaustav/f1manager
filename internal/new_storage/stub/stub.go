@@ -250,3 +250,5 @@ func (d *Dynamic) DeleteTransferOffer(context.Context, int64, int64) error {
 }
 
 func (d *Dynamic) LeaveGroup(context.Context, int64, int64) error { return ErrNotImplemented }
+
+func (d *Dynamic) ClearGroup(context.Context, int64) error { return ErrNotImplemented }

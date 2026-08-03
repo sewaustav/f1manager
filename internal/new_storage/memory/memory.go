@@ -544,3 +544,16 @@ func (r *Repo) ExecutePilotTransfer(_ context.Context, pilotID, _, toTeamID int6
 	}
 	return nil
 }
+
+func (r *Repo) ClearGroup(_ context.Context, groupID int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.players, groupID)
+	delete(r.offers, groupID)
+	return nil
+}
+
+func (r *Repo) RegisterGroup(ctx context.Context, userID int64, _, _ string) error {
+	// groupID == id организатора, как и в redis-реализации.
+	return r.SavePlayer(ctx, userID, models.Player{ID: userID})
+}

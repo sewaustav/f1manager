@@ -34,6 +34,8 @@ func (f *fakeResetUser) ResetGroup(_ context.Context, groupID int64) error {
 
 func (f *fakeResetUser) LeaveGroup(context.Context, int64) error { return nil }
 
+func (f *fakeResetUser) KickPlayer(context.Context, int64, int64) error { return nil }
+
 type fakeResetSetupDispatcher struct{ cancelledGroup *int64 }
 
 func (f *fakeResetSetupDispatcher) Submit(context.Context, int64, int64, dto.Setup) error { return nil }
