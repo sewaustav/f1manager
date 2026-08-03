@@ -137,6 +137,9 @@ func (d *Dispatcher) Submit(ctx context.Context, userID, groupID int64, setup dt
 	return nil
 }
 
+// seasonStages — число этапов в сезоне (по одному на трассу).
+const seasonStages = 24
+
 func (d *Dispatcher) runRace(ctx context.Context, groupID, stage int64) {
 	_, err := d.service.Simulate(ctx, groupID, stage)
 
@@ -148,6 +151,25 @@ func (d *Dispatcher) runRace(ctx context.Context, groupID, stage int64) {
 	}
 
 	d.notifier.BroadcastGroup(groupID, msg)
+
+	if err != nil {
+		// Раунд уже закрыт: пусть организатор решает, что делать со сбоем,
+		// вместо автоматического перехода на следующий этап.
+		return
+	}
+
+	// Открываем следующую гонку (или закрываем сезон). Больше этого не делает
+	// никто: InitRound доступен только через POST /rounds/:stage/init, который
+	// не вызывает ни один клиент, так что без этого группа после первой же
+	// гонки оставалась в фазе racing без открытого раунда — сетапы принимались
+	// в пустоту и симуляция больше никогда не запускалась.
+	if stage < seasonStages {
+		d.InitRound(groupID, stage+1, d.notifier.GroupSize(groupID))
+		return
+	}
+	if d.phase != nil {
+		d.phase.Set(groupID, PhaseInterSeason, stage)
+	}
 }
 
 func mustMarshal(v any) []byte {

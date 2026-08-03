@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"f1/internal/models"
 	"f1/internal/web/dto"
@@ -12,10 +13,39 @@ func (s *Service) GetUserGroup(ctx context.Context, userID int64) (*int64, error
 }
 
 func (s *Service) RegisterGroup(ctx context.Context, userID int64, group dto.Group) error {
+	// Идентификатор группы — это id организатора, поэтому повторное создание
+	// попадает в тот же ключ. Без очистки в «новую» группу подтягивались
+	// участники прошлой сессии со всем их состоянием.
+	if err := s.dynamic.ClearGroup(ctx, userID); err != nil {
+		return err
+	}
 	if err := s.dynamic.RegisterGroup(ctx, userID, group.Name, group.Password); err != nil {
 		return err
 	}
 	return s.seedGroupWorld(ctx, userID)
+}
+
+// KickPlayer — удаление участника организатором. Себя выгнать нельзя:
+// организатору для выхода есть LeaveGroup, а для сброса игры — ResetGroup.
+func (s *Service) KickPlayer(ctx context.Context, organizerID, targetID int64) error {
+	groupID, err := s.getUserGroup(ctx, organizerID)
+	if err != nil {
+		return err
+	}
+	if organizerID != groupID {
+		return errors.New("удалять участников может только организатор")
+	}
+	if targetID == organizerID {
+		return errors.New("организатор не может удалить самого себя")
+	}
+	targetGroup, err := s.dynamic.GetUserGroup(ctx, targetID)
+	if err != nil {
+		return err
+	}
+	if targetGroup == nil || *targetGroup != groupID {
+		return errors.New("игрок не состоит в вашей группе")
+	}
+	return s.LeaveGroup(ctx, targetID)
 }
 
 // seedGroupWorld копирует статические шаблоны команд (base_team) и пилотов

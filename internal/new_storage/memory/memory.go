@@ -5,6 +5,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 
 	"f1/internal/models"
@@ -23,6 +24,8 @@ type Repo struct {
 	cars       map[int64]map[int64]models.Car     // group -> teamID -> car
 	principals map[int64]models.TeamPrincipal     // principalID -> principal
 	engines    []models.Engine
+	offers     map[int64]map[int64]models.TransferOffer // group -> offerID -> offer
+	offerSeq   int64
 	baseTeams  []models.Team  // шаблоны для GetBaseTeams/сидирования группы
 	allPilots  []models.Pilot // общий (не по группам) список — статический GetPilots
 }
@@ -431,4 +434,126 @@ func (r *Repo) player(groupID, userID int64) *models.Player {
 		return g[userID]
 	}
 	return nil
+}
+
+// --- трансферные предложения ---
+
+func (r *Repo) CreateTransferOffer(_ context.Context, groupID int64, o models.TransferOffer) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.offers == nil {
+		r.offers = map[int64]map[int64]models.TransferOffer{}
+	}
+	if r.offers[groupID] == nil {
+		r.offers[groupID] = map[int64]models.TransferOffer{}
+	}
+	r.offerSeq++
+	o.ID = r.offerSeq
+	r.offers[groupID][o.ID] = o
+	return o.ID, nil
+}
+
+func (r *Repo) GetTransferOffer(_ context.Context, groupID, offerID int64) (models.TransferOffer, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if g, ok := r.offers[groupID]; ok {
+		if o, ok := g[offerID]; ok {
+			return o, nil
+		}
+	}
+	return models.TransferOffer{}, errors.New("offer not found")
+}
+
+func (r *Repo) ListTransferOffers(_ context.Context, groupID int64) ([]models.TransferOffer, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]models.TransferOffer, 0, len(r.offers[groupID]))
+	for _, o := range r.offers[groupID] {
+		out = append(out, o)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (r *Repo) DeleteTransferOffer(_ context.Context, groupID, offerID int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if g, ok := r.offers[groupID]; ok {
+		delete(g, offerID)
+	}
+	return nil
+}
+
+func (r *Repo) LeaveGroup(ctx context.Context, userID, groupID int64) error {
+	pilots, err := r.GetPlayerPilots(ctx, userID, groupID)
+	if err != nil {
+		return err
+	}
+	for _, p := range pilots {
+		if err := r.SetPilotOwner(ctx, p.ID, groupID, nil, nil); err != nil {
+			return err
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if g, ok := r.players[groupID]; ok {
+		delete(g, userID)
+	}
+	return nil
+}
+
+func (r *Repo) UpdateBudget(_ context.Context, userID, groupID int64, delta int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	g, ok := r.players[groupID]
+	if !ok {
+		return errors.New("group not found")
+	}
+	p, ok := g[userID]
+	if !ok {
+		return errors.New("player not found")
+	}
+	p.Budget += delta
+	return nil
+}
+
+// ExecutePilotTransfer переносит пилота новому владельцу и в его гараж —
+// как и в redis-реализации, иначе пилот не попадает в состав команды.
+func (r *Repo) ExecutePilotTransfer(_ context.Context, pilotID, _, toTeamID int64, _ int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var groupID int64 = -1
+	for g, players := range r.players {
+		if _, ok := players[toTeamID]; ok {
+			groupID = g
+			break
+		}
+	}
+	if groupID < 0 {
+		return errors.New("buyer not in any group")
+	}
+	p, ok := r.pilots[groupID][pilotID]
+	if !ok {
+		return errors.New("pilot not found")
+	}
+	owner := toTeamID
+	p.Team = &owner
+	if buyer, ok := r.players[groupID][toTeamID]; ok && buyer.Team != 0 {
+		garage := buyer.Team
+		p.Garage = &garage
+	}
+	return nil
+}
+
+func (r *Repo) ClearGroup(_ context.Context, groupID int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.players, groupID)
+	delete(r.offers, groupID)
+	return nil
+}
+
+func (r *Repo) RegisterGroup(ctx context.Context, userID int64, _, _ string) error {
+	// groupID == id организатора, как и в redis-реализации.
+	return r.SavePlayer(ctx, userID, models.Player{ID: userID})
 }

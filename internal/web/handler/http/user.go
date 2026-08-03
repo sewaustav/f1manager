@@ -15,6 +15,12 @@ type User interface {
 	// ResetGroup wipes a group's gameplay data back to a fresh pre-draft
 	// lobby — see POST /groups/reset ("end the game early").
 	ResetGroup(ctx context.Context, groupID int64) error
+
+	// LeaveGroup выводит игрока из группы (POST /groups/leave).
+	LeaveGroup(ctx context.Context, userID int64) error
+
+	// KickPlayer — организатор удаляет участника (POST /groups/kick).
+	KickPlayer(ctx context.Context, organizerID, targetID int64) error
 }
 
 type Manager interface {

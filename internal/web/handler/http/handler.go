@@ -32,6 +32,13 @@ type DraftCanceller interface {
 	CancelGroup(groupID int64)
 }
 
+// TokenSetupGate копит сабмиты token-setup и открывает первую гонку, когда
+// сдала вся группа — без этого фаза token_setup ни во что не переходила.
+type TokenSetupGate interface {
+	Submitted(groupID, userID int64, totalPlayers int)
+	CancelGroup(groupID int64)
+}
+
 type HttpHandler struct {
 	sim         Sim
 	crossSeason CrossSeason
@@ -42,6 +49,7 @@ type HttpHandler struct {
 	ready       ReadyDispatcher
 	phase       PhaseReader
 	draft       DraftCanceller
+	tokenSetup  TokenSetupGate
 }
 
 func NewHttpHandler(
@@ -54,6 +62,7 @@ func NewHttpHandler(
 	ready ReadyDispatcher,
 	phase PhaseReader,
 	draft DraftCanceller,
+	tokenSetup TokenSetupGate,
 ) *HttpHandler {
 	return &HttpHandler{
 		sim:         sim,
@@ -65,6 +74,7 @@ func NewHttpHandler(
 		ready:       ready,
 		phase:       phase,
 		draft:       draft,
+		tokenSetup:  tokenSetup,
 	}
 }
 
@@ -223,6 +233,14 @@ func (h *HttpHandler) MakeSetup(c *gin.Context) {
 	if err := h.crossSeason.MakeTokenSetup(ctx, user, req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Отмечаем сдачу: когда сдаст вся группа, откроется первая гонка и фаза
+	// уйдёт из token_setup в racing. Иначе группа зависает здесь навсегда.
+	if h.tokenSetup != nil {
+		if groupID, err := h.userData.GetUserGroup(ctx, user); err == nil && groupID != nil {
+			h.tokenSetup.Submitted(*groupID, user, h.manager.GroupSize(*groupID))
+		}
 	}
 
 	c.Status(201)
@@ -508,7 +526,43 @@ func (h *HttpHandler) RegisterGroup(c *gin.Context) {
 		return
 	}
 
+	// Группа пересоздаётся под тем же id (он равен id организатора), поэтому
+	// сбрасываем и то, что живёт в памяти: иначе свежая группа унаследует
+	// фазу, недоигранный драфт или собранную готовность прошлой сессии.
+	h.clearGroupRuntime(user)
+
 	c.JSON(200, gin.H{"message": "group registered"})
+}
+
+// clearGroupRuntime сбрасывает всё in-memory состояние группы.
+func (h *HttpHandler) clearGroupRuntime(groupID int64) {
+	h.dispatcher.CancelGroup(groupID)
+	h.draft.CancelGroup(groupID)
+	h.ready.CancelGroup(groupID)
+	h.phase.Clear(groupID)
+	if h.tokenSetup != nil {
+		h.tokenSetup.CancelGroup(groupID)
+	}
+}
+
+// KickPlayer — организатор удаляет участника из группы.
+func (h *HttpHandler) KickPlayer(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	var req dto.KickPlayer
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.userData.KickPlayer(ctx, user, req.UserID); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(200)
 }
 
 func (h *HttpHandler) JoinGroup(c *gin.Context) {
@@ -566,6 +620,9 @@ func (h *HttpHandler) ResetGroup(c *gin.Context) {
 	h.draft.CancelGroup(*groupID)
 	h.ready.CancelGroup(*groupID)
 	h.phase.Clear(*groupID)
+	if h.tokenSetup != nil {
+		h.tokenSetup.CancelGroup(*groupID)
+	}
 
 	c.Status(200)
 }
@@ -651,4 +708,69 @@ func (h *HttpHandler) GetSeasonState(c *gin.Context) {
 		"submitted_setups": submitted,
 		"total_players":    total,
 	})
+}
+
+// --- Трансферные предложения и выход из группы ---
+
+// GetIncomingOffers — предложения выкупить пилота, адресованные игроку.
+// Клиент опрашивает этот список: доставка через WS оказалась ненадёжной.
+func (h *HttpHandler) GetIncomingOffers(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	offers, err := h.crossSeason.ListIncomingOffers(ctx, user)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, offers)
+}
+
+// RespondToOffer — владелец принимает или отклоняет предложение.
+func (h *HttpHandler) RespondToOffer(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	var req dto.OfferResponse
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.crossSeason.RespondToOffer(ctx, user, req.OfferID, req.Accept); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(200)
+}
+
+// LeaveGroup — выход игрока из группы.
+//
+// Организатору выход тоже разрешён. Группа остаётся жить: её мета и
+// остальные участники на месте, войти по ID по-прежнему можно. Пока
+// организатора нет, некому вызвать POST /groups/reset (право завязано на
+// совпадение id пользователя и группы), но он вернёт его, просто зайдя
+// обратно по тому же ID.
+func (h *HttpHandler) LeaveGroup(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, exist := h.getUser(c)
+	if !exist {
+		c.JSON(403, gin.H{"error": "user not found"})
+		return
+	}
+	groupID, err := h.userData.GetUserGroup(ctx, user)
+	if err != nil || groupID == nil {
+		c.JSON(400, gin.H{"error": "group not found"})
+		return
+	}
+	if err := h.userData.LeaveGroup(ctx, user); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(200)
 }
